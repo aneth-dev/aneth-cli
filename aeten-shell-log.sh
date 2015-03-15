@@ -1,6 +1,3 @@
-#!/bin/sh
-# Bashism: FUNCNAME. So what?
-
 __colorize() {
 	local color=$1
 	shift
