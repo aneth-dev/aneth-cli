@@ -1,7 +1,7 @@
 __colorize() {
 	local color=$1
 	shift
-	echo $(tput colors 2>/dev/null | grep -q 8 && printf "\033[${color}${*}\033[0;0m" || echo "${*}")
+	echo $(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${*}\033[0;0m" || echo "${*}")
 }
 
 __tag() {
