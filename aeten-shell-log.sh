@@ -86,12 +86,12 @@ check() {
 	level=${1}; shift
 	message=${1}; shift
 	printf "${OPEN_BRACKET}${EMPTY_TAG}${CLOSE_BRACKET} ${message}${SAVE_CURSOR_POSITION}"
-	output=$( ( ${*} 2>&1 ) )
+	output=$(eval ${*} 2>&1)
 	error_code=${?}
 	[ 0 -eq "${error_code}" ] && __tag "${PASS}" || case ${level} in
 		warn) __tag "${WARN}" ;;
-		error) __tag "${ERROR}"; echo "${*}"; echo "${output}" ;;
-		fatal) __tag "${FAIL}";  echo "${*}"; echo "${output}"; exit ${error_code} ;;
+		error) __tag "${ERROR}"; echo "${*}"; echo "${output}"|sed '$,/^\s*$/d' ;;
+		fatal) __tag "${FAIL}";  echo "${*}"; echo "${output}"|sed '$,/^\s*$/d'; exit ${error_code} ;;
 	esac
 	return ${error_code}
 }
