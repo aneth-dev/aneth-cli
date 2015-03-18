@@ -1,3 +1,5 @@
+#!/bin/sh
+
 __colorize() {
 	local color=$1
 	shift
@@ -28,7 +30,7 @@ __log() {
 }
 
 title() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME} <message>" >&2 ; exit 1; }
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	while test ${#} -ne 0; do
 		case "${1}" in
 			-*) args+=" ${1}"; shift;;
@@ -38,34 +40,34 @@ title() {
 	echo ${args} $(__colorize ${TITLE_COLOR} "${*}")
 }
 
-info() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME} <message>" >&2 ; exit 1; }
+inform() {
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	__log "${INFO}" "${*}\n"
 }
 
 pass() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME} <message>" >&2 ; exit 1; }
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	__log "${PASS}" "${*}\n"
 }
 
 warn() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME} <message>" >&2 ; exit 1; }
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	__log "${WARN}" "${*}\n"
 }
 
 error() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME} <message>" >&2 ; exit 1; }
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	__log "${FAIL}" "${*}\n"
 }
 
 fatal() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME} <message>" >&2 ; exit 1; }
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	__log "${FAIL}" "${*}\n"
 	exit 1
 }
 
 query() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME} <message>" >&2 ; exit 1; }
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	local out
 	out=/proc/${$}/fd/1
 	__log "${WARN}" "${*} " > ${out}
@@ -78,7 +80,7 @@ query() {
 }
 
 check() {
-	[ 2 -lt ${#} ] || { echo "Usage: ${FUNCNAME} (warn|error|fatal) '<message>' <command>" >&2 ; exit 1; }
+	[ 2 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} (warn|error|fatal) '<message>' <command>" >&2 ; exit 1; }
 	local level
 	local message
 	local error_code
@@ -95,3 +97,7 @@ check() {
 	esac
 	return ${error_code}
 }
+
+if [ -L ${0} ]; then
+	$(basename ${0}) "${@}"
+fi

@@ -1,9 +1,7 @@
 #!/bin/sh
-
-. $(dirname $(readlink -f $0))/aeten-shell-log.sh
-
+. $(dirname $0)/aeten-shell-log.sh
 title Simple logging messages
-info An information message
+inform An information message
 warn A warning message
 error An error message
 
