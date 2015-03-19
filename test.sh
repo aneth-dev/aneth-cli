@@ -6,15 +6,17 @@ warn A warning message
 error An error message
 
 title Simple checks
-check warn "No warning occured." return 0
-check warn "A warning occured." return 1
-check error "No error occured." return 0
-check error "An error occured." return 1
+check --level warn --message "No warning occured." return 0
+check -l warn -m "A warning occured." return 1
+check -l error -m "No error occured." return 0
+check -l error -m "An error occured." return 1
 
-title Check exit 1 on fatal error
-( check fatal "A fatal error occured in a sub-shell." return 1 )
-check fatal "Check if fatal error causes exit." test ${?} -eq 1
+title Check exit code
+( check -l fatal -m "A fatal error occured in a sub-shell." return 1 )
+check -m "Check if fatal error causes exit." test ${?} -eq 1
+check -l error --errno 2 -m "Raise an error and override return code to 2." return 1
+check echo '$?='${?}\; test ${?} -eq 2
 
 title Query and reply
-answer=$( ( sleep 1;echo yes ) | query Will says '"yes"' in 1 second. )
-check fatal 'Check if answer is "yes".' test "${answer}" = yes
+answer=$( ( sleep 1;echo yes ) | query Will say '"yes"' in 1 second. )
+check -m 'Check if answer is "yes".' test "${answer}" = yes

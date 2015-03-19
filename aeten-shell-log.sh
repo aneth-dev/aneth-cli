@@ -80,22 +80,39 @@ query() {
 }
 
 check() {
-	[ 2 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} (warn|error|fatal) '<message>' <command>" >&2 ; exit 1; }
 	local level
 	local message
-	local error_code
+	local errno
 	local output
-	level=${1}; shift
-	message=${1}; shift
+	local usage
+	usage="${FUNCNAME:-${0}} [--level|-l warn|error|fatal] [--errno|-e <errno>] [--message|-m <message>] [--] <command>"
+	while [ ${#} -ne 0 ]; do
+		case "${1}" in
+			--message|-m) message=${2}; shift ;;
+			--level|-l)   level=${2}; shift ;;
+			--errno|-e)   errno=${2}; shift ;;
+			--help|-h)    echo "${usage}"; exit 0 ;;
+			--)           shift; break ;;
+			-*)           echo "Usage: ${usage}" >&2; exit 1 ;;
+			*)            break ;;
+		esac
+		shift
+	done
+	: ${level=fatal}
+	: ${message=${*}}
 	printf "${OPEN_BRACKET}${EMPTY_TAG}${CLOSE_BRACKET} ${message}${SAVE_CURSOR_POSITION}"
 	output=$(eval ${*} 2>&1)
-	error_code=${?}
-	[ 0 -eq "${error_code}" ] && __tag "${PASS}" || case ${level} in
+	if [ 0 -eq ${?} ]; then
+		errno=0
+	else
+		errno=${errno:-${?}}
+	fi
+	[ 0 -eq "${errno}" ] && __tag "${PASS}" || case ${level} in
 		warn) __tag "${WARN}" ;;
 		error) __tag "${ERROR}"; echo "${*}"; echo "${output}"|sed '$,/^\s*$/d' ;;
-		fatal) __tag "${FAIL}";  echo "${*}"; echo "${output}"|sed '$,/^\s*$/d'; exit ${error_code} ;;
+		fatal) __tag "${FAIL}";  echo "${*}"; echo "${output}"|sed '$,/^\s*$/d'; exit ${errno} ;;
 	esac
-	return ${error_code}
+	return ${errno}
 }
 
 if [ -L ${0} ]; then
