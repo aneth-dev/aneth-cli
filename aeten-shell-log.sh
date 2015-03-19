@@ -134,6 +134,6 @@ check() {
 	return ${errno}
 }
 
-if [ -L "${0}" ] && [ 1 -eq $(__api "${0}"|grep "$(basename ${0})"|wc -l) ]; then
+if [ 0 -eq ${SHELL_LOG_INCLUDE:=0} ] && [ -L "${0}" ] && [ 1 -eq $(__api "${0}"|grep "$(basename ${0})"|wc -l) ]; then
 	$(basename ${0}) "${@}"
 fi
