@@ -6,10 +6,6 @@ __colorize() {
 	echo $(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${*}\033[0;0m" || echo "${*}")
 }
 
-__tag() {
-	printf "\r${OPEN_BRACKET}${1}${CLOSE_BRACKET}${RESTORE_CURSOR_POSITION}\n"
-}
-
 SAVE_CURSOR_POSITION='\033[s'
 RESTORE_CURSOR_POSITION='\033[u'
 MOVE_CURSOR_UP='\033[1A'
@@ -22,6 +18,14 @@ ERROR=${FAIL}
 OPEN_BRACKET=$(__colorize '0;37m' '[ ')
 CLOSE_BRACKET=$(__colorize '0;37m' ' ]')
 EMPTY_TAG=$(printf "%4s")
+
+__api() {
+	sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' "${*}"
+}
+
+__tag() {
+	printf "\r${OPEN_BRACKET}${1}${CLOSE_BRACKET}${RESTORE_CURSOR_POSITION}\n"
+}
 
 __log() {
 	local level
@@ -66,10 +70,25 @@ fatal() {
 	exit 1
 }
 
+__ppid() {
+	awk '{print $4}' /proc/${1}/stat
+}
+
 query() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
+	local pid
 	local out
-	out=/proc/${$}/fd/1
+	local sourced
+	[ $(basename "${0}") = query ] || sourced=1
+	: ${sourced:=0}
+	pid=$$
+	while [ $pid -ne 1 ]; do
+		script=$(cat /proc/$pid/cmdline | tr '\000' ' ' | awk '{print $2}')
+		pid=$(__ppid ${pid})
+		[ $pid -eq 1 ] && { pid=$$; break; }
+		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__ppid $pid); break; }
+	done
+	out=/proc/${pid}/fd/1
 	__log "${WARN}" "${*} " > ${out}
 	printf ${SAVE_CURSOR_POSITION} > ${out}
 	read REPLY
@@ -101,7 +120,7 @@ check() {
 	: ${level=fatal}
 	: ${message=${*}}
 	printf "${OPEN_BRACKET}${EMPTY_TAG}${CLOSE_BRACKET} ${message}${SAVE_CURSOR_POSITION}"
-	output=$(eval ${*} 2>&1)
+	output=$(eval "${*}" 2>&1)
 	if [ 0 -eq ${?} ]; then
 		errno=0
 	else
@@ -115,6 +134,6 @@ check() {
 	return ${errno}
 }
 
-if [ -L ${0} ]; then
+if [ -L "${0}" ] && [ 1 -eq $(__api "${0}"|grep "$(basename ${0})"|wc -l) ]; then
 	$(basename ${0}) "${@}"
 fi
