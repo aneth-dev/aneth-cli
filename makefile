@@ -1,23 +1,25 @@
 prefix := /usr/local
-bin := bin
-lib := lib
+lib := $(prefix)/lib
 
+CUR_DIR = $(shell readlink -f "$(CURDIR)")
+LIB_DIR = $(shell readlink -f "$$(test '$(lib)' = '$$(pwd)' && echo $(lib) || echo $(lib))")
 SCRIPT = aeten-shell-log.sh
-COMMANDS = $(shell sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' $(SCRIPT))
-LIB_DIR = $(shell readlink -f $(prefix)/$(lib))
-LINKS = $(addprefix $(prefix)/$(bin)/,$(COMMANDS))
+COMMANDS = $(shell . $$(pwd)/$(SCRIPT) ; __api $(SCRIPT))
+LINKS = $(addprefix $(prefix)/bin/,$(COMMANDS))
 
 .PHONY: install uninstall
 install: $(LINKS)
 
 uninstall:
-	rm -f $(LIB_DIR)/$(SCRIPT) $(LINKS)
+	rm -f $(filter-out $(CUR_DIR)/$(SCRIPT),$(LIB_DIR)/$(SCRIPT)) $(LINKS)
 
 test:
 	@./test.sh
 
+ifneq ($(LIB_DIR),$(CUR_DIR)) # Prevent circular dependency
 $(LIB_DIR)/%: %
-	cp -f $< $@
+	cp $< $@
+endif
 
 $(LINKS): $(LIB_DIR)/$(SCRIPT)
-	ln -fs $< $@
+	ln -s $< $@
