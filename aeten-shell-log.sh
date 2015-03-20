@@ -35,13 +35,7 @@ __log() {
 
 title() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	while test ${#} -ne 0; do
-		case "${1}" in
-			-*) args+=" ${1}"; shift;;
-			*) break ;;
-		esac
-	done
-	echo ${args} $(__colorize ${TITLE_COLOR} "${*}")
+	echo $(__colorize ${TITLE_COLOR} "${*}")
 }
 
 inform() {
@@ -78,15 +72,13 @@ query() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	local pid
 	local out
-	local sourced
-	[ $(basename "${0}") = query ] || sourced=1
-	: ${sourced:=0}
-	pid=$$
-	while [ $pid -ne 1 ]; do
-		script=$(cat /proc/$pid/cmdline | tr '\000' ' ' | awk '{print $2}')
+	local script
+	pid=${$}
+	while [ ${pid} -ne 1 ]; do
+		script=$(cat /proc/${pid}/cmdline | tr '\000' ' ' | awk '{print $2}')
 		pid=$(__ppid ${pid})
-		[ $pid -eq 1 ] && { pid=$$; break; }
-		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__ppid $pid); break; }
+		[ ${pid} -eq 1 ] && { pid=${$}; break; }
+		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__ppid ${pid}); break; }
 	done
 	out=/proc/${pid}/fd/1
 	__log "${WARN}" "${*} " > ${out}
