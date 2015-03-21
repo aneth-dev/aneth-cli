@@ -49,7 +49,7 @@ MOVE_CURSOR_DOWN='\033[1B'
 CLEAR_LINE='\033[2K'
 
 __api() {
-	sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' "${*}"
+	sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
 }
 
 __tag() {
@@ -234,6 +234,12 @@ check() {
 	return ${errno}
 }
 
-if [ 0 -eq ${SHELL_LOG_INCLUDE:=0} ] && [ -L "${0}" ] && [ 1 -eq $(__api "${0}"|grep "$(basename ${0})"|wc -l) ]; then
+if [ 0 -eq ${SHELL_LOG_INCLUDE=0} ] && [ -L "${0}" ] && [ 1 -eq $(__api "${0}"|grep "$(basename ${0})"|wc -l) ]; then
 	$(basename ${0}) "${@}"
+elif [ 0 -eq ${SHELL_LOG_INCLUDE} ] && [ ! -L "${0}" ]; then
+	cmd=${1}
+	if [ 1 -eq $(__api "${0}"|grep "${cmd}"|wc -l) ]; then
+		shift
+		${cmd} "${@}"
+	fi
 fi
