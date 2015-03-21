@@ -20,3 +20,15 @@ check echo '$?='${?}\; test ${?} -eq 2
 title Query and reply
 answer=$( ( sleep 1;echo yes ) | query Will say '"yes"' in 1 second. )
 check -m 'Check if answer is "yes".' test "${answer}" = yes
+
+title Confirm
+echo | confirm --yes '"yes" is default'
+check -m 'Check if reply is affirmative.' test ${?} -eq 0
+echo foo | confirm --yes 'foo'
+check test ${?} -eq 2
+confirm --yes --assert 3rd try is valid but negate << EOF
+foo
+bar
+n
+EOF
+check -m 'Check if reply negates.' test ${?} -eq 1
