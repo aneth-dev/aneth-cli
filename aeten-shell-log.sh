@@ -20,7 +20,7 @@ YES_DEFAULT='[Yes|no]:'
 NO_DEFAULT='[yes|No]:'
 YES_PATTERN='y|yes|Yes|YES'
 NO_PATTERN='n|no|No|NO'
-INVALID_REPLY_MESSAGE="%s: Invalid reply, %s was expected."
+INVALID_REPLY_MESSAGE="%s: Invalid reply (%s was expected)."
 ERROR=${FAIL}
 OPEN_BRACKET=$(__colorize '0;37m' '[ ')
 CLOSE_BRACKET=$(__colorize '0;37m' ' ]')
@@ -33,16 +33,18 @@ __api() {
 __tag() {
 	local eol
 	local restore
+	local moveup
 	eol="\n"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
-			-r) rastore=${RESTORE_CURSOR_POSITION};;
+			-r) restore=${RESTORE_CURSOR_POSITION} ;;
+			-u) moveup=${MOVE_CURSOR_UP} ;;
 			-n) eol="" ;;
 			*) break;;
 		esac
 		shift
 	done
-	printf "\r${OPEN_BRACKET}${1}${CLOSE_BRACKET}${restore}${eol}"
+	printf "${moveup}\r${OPEN_BRACKET}${1}${CLOSE_BRACKET}${restore}${eol}"
 }
 
 __log() {
@@ -112,8 +114,7 @@ query() {
 	out=/proc/${pid}/fd/1
 	__log -n -s "${WARN}" "${*} " > ${out}
 	read REPLY
-	[ -t 0 ] && printf "${MOVE_CURSOR_UP}" > ${out}
-	__tag -r "${INFO}" > ${out}
+	{ [ -t 0 ] && __tag -r -u "${INFO}" || __tag -r "${INFO}"; } > ${out}
 	echo ${REPLY}
 }
 
@@ -123,23 +124,38 @@ confirm() {
 	local no_pattern
 	local usage
 	local assert
+	local loop
 	local reply
 	expected=${NO_DEFAULT}
 	yes_pattern=${YES_PATTERN}
 	no_pattern=${NO_PATTERN}
 	assert=0
-	usage="${FUNCNAME:-${0}} [--yes|-y] [--yes-pattern <pattern>] [--no-pattern <pattern>] [--] <message>
-${FUNCNAME:-${0}} [--no|n] [--yes-pattern <pattern>] [--no-pattern <pattern>] [--] <message>"
+	usage="${FUNCNAME:-${0}} [--assert|-a] [--yes-pattern <pattern>] [--no-pattern <pattern>] [--] <message>
+${FUNCNAME:-${0}} [--assert|-a] [--yes-pattern <pattern>] [--no-pattern <pattern>] [--] <message>
+${FUNCNAME:-${0}} [--yes|y] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <pattern>] [--] <message>
+${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <pattern>] [--] <message>
+\t-y, yes
+\t\tPositive reply is default.
+\t-n, no
+\t\tNegative reply is default.
+\t-a, --assert
+\t\tReturn code is 2 if reply does not matches patterns.
+\t--yes-pattern
+\t\tThe extended-regex (see grep) for positive answer.
+\t--no-pattern
+\t\tThe extended-regex (see grep) for negative answer.
+"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
 			--yes|-y)      expected=${YES_DEFAULT} ;;
 			--no|-n)       expected=${NO_DEFAULT} ;;
+			--assert|-a)   assert=1 ;;
+			--loop|-l)     loop=1 ;;
 			--yes-pattern) yes_pattern=${2}; shift ;;
 			--no-pattern)  no_pattern=${2}; shift ;;
-			--assert)      assert=1 ;;
 			--help|-h)     echo "${usage}" >&2; exit 0 ;;
 			--)            shift; break ;;
-			-*)            echo "Usage:\n${usage}" >&2; exit 1 ;;
+			-*)            echo "Usage:\n${usage}" >&2; exit 3 ;;
 			*)             break ;;
 		esac
 		shift
@@ -147,16 +163,17 @@ ${FUNCNAME:-${0}} [--no|n] [--yes-pattern <pattern>] [--no-pattern <pattern>] [-
 
 	while true; do
 		reply=$(query ${*} "${expected}")
-		[ ${assert} -eq 0 ] || {
-			echo "${reply}" | grep --extended-regexp "${yes_pattern}|${no_pattern}" 2>/dev/null 1>/dev/null
-		} && break
+		echo "${reply}" | grep --extended-regexp "${yes_pattern}|${no_pattern}" 2>/dev/null 1>/dev/null && break
+		if [ ${loop:-0} -eq 1 ]; then
+			printf "${INVALID_REPLY_MESSAGE}\n" "${reply}" "[${yes_pattern}|${no_pattern}]" >&2
+		else
+			break
+		fi
 	done
 	[ -z "${reply}" ] && { [ ${expected} = ${YES_DEFAULT} ] && return 0 || return 1; }
 	echo "${reply}" | grep --extended-regexp "${yes_pattern}" 2>&1 1>/dev/null && return 0
 	echo "${reply}" | grep --extended-regexp "${no_pattern}" 2>&1 1>/dev/null && return 1
-
-	printf "${INVALID_REPLY_MESSAGE}\n" "${reply}" "[${yes_pattern}|${no_pattern}]" >&2
-	return 2
+	[ ${assert:-0} -eq 0 ] && { [ ${expected} = ${YES_DEFAULT} ] && return 0 || return 1; } || return 2
 }
 
 check() {

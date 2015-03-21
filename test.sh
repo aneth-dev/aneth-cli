@@ -24,11 +24,14 @@ check -m 'Check if answer is "yes".' test "${answer}" = yes
 title Confirm
 echo | confirm --yes '"yes" is default'
 check -m 'Check if reply is affirmative.' test ${?} -eq 0
-echo foo | confirm --yes 'foo'
-check test ${?} -eq 2
-confirm --yes --assert 3rd try is valid but negate << EOF
+echo foo | confirm --yes --assert 'Invalid value whith --assert'
+check -m 'Check return code is 2.' test ${?} -eq 2
+echo foo | confirm --yes 'Invalid value without --assert'
+check -m 'Check return code is 0 (default for --yes)' test ${?} -eq 0
+confirm --yes --loop 3 tries << EOF
 foo
 bar
-n
+no
+foo
 EOF
-check -m 'Check if reply negates.' test ${?} -eq 1
+check -m 'Check if third reply is negative.' test ${?} -eq 1
