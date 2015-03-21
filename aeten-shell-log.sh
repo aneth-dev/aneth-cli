@@ -11,33 +11,42 @@ __colorize() {
 [ -f ~/.config/aeten-shell-log ] && . ~/.config/aeten-shell-log
 [ -f ~/.etc/aeten-shell-log ] && . ~/.etc/aeten-shell-log
 
+: ${INFORMATION=INFO}
+: ${WARNING=WARN}
+: ${SUCCESS=PASS}
+: ${FAILURE=FAIL}
+: ${QUERY=WARN}
+: ${ANSWERED=INFO}
+: ${OPEN_BRACKET=[ }
+: ${CLOSE_BRACKET= ]}
+: ${INVALID_REPLY_MESSAGE=%s: Invalid reply (%s was expected).}
+: ${YES_DEFAULT='[Yes|no]:'}
+: ${NO_DEFAULT='[yes|No]:'}
+: ${YES_PATTERN='y|yes|Yes|YES'}
+: ${NO_PATTERN='n|no|No|NO'}
 if [ 0 -eq ${TAG_LENGTH:-0} ]; then
 	TAG_LENGTH=0
-	for TAG in ${INFORMATION:-INFO} ${WARNING:-WARN} ${SUCCESS:-PASS} ${FAILURE:-FAIL}; do
+	for TAG in "${INFORMATION}" "${WARNING}" "${SUCCESS}" "${FAILURE}" "${QUERY}" "${ANSWERED}"; do
 		[ ${#TAG} -gt ${TAG_LENGTH} ] && TAG_LENGTH=${#TAG}
 	done
 	unset TAG
 fi
 EMPTY_TAG=$(printf "%${TAG_LENGTH}s")
 unset TAG_LENGTH
-INFORMATION=$(__colorize '1;37m' "${INFORMATION=INFO}")
-WARNING=$(__colorize '1;33m'  "${WARNING=WARN}")
-SUCCESS=$(__colorize '1;32m' "${SUCCESS=PASS}")
-FAILURE=$(__colorize '1;31m' "${FAILURE=FAIL}")
-OPEN_BRACKET=$(__colorize '0;37m' "${OPEN_BRACKET=[ }")
-CLOSE_BRACKET=$(__colorize '0;37m' "${CLOSE_BRACKET= ]}")
-: ${INVALID_REPLY_MESSAGE=%s: Invalid reply (%s was expected).}
-YES_DEFAULT='[Y|n]:'
-: ${YES_DEFAULT='[Yes|no]:'}
-NO_DEFAULT='[yes|No]:'
-YES_PATTERN='y|yes|Yes|YES'
-NO_PATTERN='n|no|No|NO'
+INFORMATION=$(__colorize '1;37m' "${INFORMATION}")
+QUERY=$(__colorize '1;33m' "${QUERY}")
+ANSWERED=$(__colorize '1;37m' "${ANSWERED}")
+WARNING=$(__colorize '1;33m' "${WARNING}")
+SUCCESS=$(__colorize '1;32m' "${SUCCESS}")
+FAILURE=$(__colorize '1;31m' "${FAILURE}")
+OPEN_BRACKET=$(__colorize '0;37m' "${OPEN_BRACKET}")
+CLOSE_BRACKET=$(__colorize '0;37m' "${CLOSE_BRACKET}")
+TITLE_COLOR='1;37m'
 SAVE_CURSOR_POSITION='\033[s'
 RESTORE_CURSOR_POSITION='\033[u'
 MOVE_CURSOR_UP='\033[1A'
 MOVE_CURSOR_DOWN='\033[1B'
 CLEAR_LINE='\033[2K'
-TITLE_COLOR='1;37m'
 
 __api() {
 	sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' "${*}"
@@ -125,9 +134,9 @@ query() {
 		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__ppid ${pid}); break; }
 	done
 	out=/proc/${pid}/fd/1
-	__log -n -s "${WARNING}" "${*} " > ${out}
+	__log -n -s "${QUERY}" "${*} " > ${out}
 	read REPLY
-	{ [ -t 0 ] && __tag -r -u "${INFORMATION}" || __tag -r "${INFORMATION}"; } > ${out}
+	{ [ -t 0 ] && __tag -r -u "${ANSWERED}" || __tag -r "${ANSWERED}"; } > ${out}
 	echo ${REPLY}
 }
 

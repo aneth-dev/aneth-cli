@@ -6,7 +6,6 @@ LIB_DIR = $(shell readlink -f "$$(test '$(lib)' = '$$(pwd)' && echo $(lib) || ec
 SCRIPT = aeten-shell-log.sh
 COMMANDS = $(shell . $$(pwd)/$(SCRIPT) ; __api $(SCRIPT))
 LINKS = $(addprefix $(prefix)/bin/,$(COMMANDS))
-$(info COMMANDS=$(COMMANDS))
 
 .PHONY: install uninstall
 install: $(LINKS)
