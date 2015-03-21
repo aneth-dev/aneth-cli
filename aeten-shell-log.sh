@@ -6,25 +6,38 @@ __colorize() {
 	echo $(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${*}\033[0;0m" || echo "${*}")
 }
 
+[ -f /etc/aeten-shell-log ] && . /etc/aeten-shell-log
+[ -f ~/.aeten-shell-log ] && . ~/.aeten-shell-log
+[ -f ~/.config/aeten-shell-log ] && . ~/.config/aeten-shell-log
+[ -f ~/.etc/aeten-shell-log ] && . ~/.etc/aeten-shell-log
+
+if [ 0 -eq ${TAG_LENGTH:-0} ]; then
+	TAG_LENGTH=0
+	for TAG in ${INFORMATION:-INFO} ${WARNING:-WARN} ${SUCCESS:-PASS} ${FAILURE:-FAIL}; do
+		[ ${#TAG} -gt ${TAG_LENGTH} ] && TAG_LENGTH=${#TAG}
+	done
+	unset TAG
+fi
+EMPTY_TAG=$(printf "%${TAG_LENGTH}s")
+unset TAG_LENGTH
+INFORMATION=$(__colorize '1;37m' "${INFORMATION=INFO}")
+WARNING=$(__colorize '1;33m'  "${WARNING=WARN}")
+SUCCESS=$(__colorize '1;32m' "${SUCCESS=PASS}")
+FAILURE=$(__colorize '1;31m' "${FAILURE=FAIL}")
+OPEN_BRACKET=$(__colorize '0;37m' "${OPEN_BRACKET=[ }")
+CLOSE_BRACKET=$(__colorize '0;37m' "${CLOSE_BRACKET= ]}")
+: ${INVALID_REPLY_MESSAGE=%s: Invalid reply (%s was expected).}
+YES_DEFAULT='[Y|n]:'
+: ${YES_DEFAULT='[Yes|no]:'}
+NO_DEFAULT='[yes|No]:'
+YES_PATTERN='y|yes|Yes|YES'
+NO_PATTERN='n|no|No|NO'
 SAVE_CURSOR_POSITION='\033[s'
 RESTORE_CURSOR_POSITION='\033[u'
 MOVE_CURSOR_UP='\033[1A'
 MOVE_CURSOR_DOWN='\033[1B'
 CLEAR_LINE='\033[2K'
 TITLE_COLOR='1;37m'
-INFO=$(__colorize '1;37m' INFO)
-WARN=$(__colorize '1;33m' WARN)
-PASS=$(__colorize '1;32m' PASS)
-FAIL=$(__colorize '1;31m' FAIL)
-YES_DEFAULT='[Yes|no]:'
-NO_DEFAULT='[yes|No]:'
-YES_PATTERN='y|yes|Yes|YES'
-NO_PATTERN='n|no|No|NO'
-INVALID_REPLY_MESSAGE="%s: Invalid reply (%s was expected)."
-ERROR=${FAIL}
-OPEN_BRACKET=$(__colorize '0;37m' '[ ')
-CLOSE_BRACKET=$(__colorize '0;37m' ' ]')
-EMPTY_TAG=$(printf "%4s")
 
 __api() {
 	sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' "${*}"
@@ -75,27 +88,27 @@ title() {
 
 inform() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${INFO}" "${*}"
+	__log "${INFORMATION}" "${*}"
 }
 
-pass() {
+success() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${PASS}" "${*}"
+	__log "${SUCCESS}" "${*}"
 }
 
 warn() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${WARN}" "${*}"
+	__log "${WARNING}" "${*}"
 }
 
 error() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${FAIL}" "${*}"
+	__log "${FAILURE}" "${*}"
 }
 
 fatal() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${FAIL}" "${*}"
+	__log "${FAILURE}" "${*}"
 	exit 1
 }
 
@@ -112,9 +125,9 @@ query() {
 		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__ppid ${pid}); break; }
 	done
 	out=/proc/${pid}/fd/1
-	__log -n -s "${WARN}" "${*} " > ${out}
+	__log -n -s "${WARNING}" "${*} " > ${out}
 	read REPLY
-	{ [ -t 0 ] && __tag -r -u "${INFO}" || __tag -r "${INFO}"; } > ${out}
+	{ [ -t 0 ] && __tag -r -u "${INFORMATION}" || __tag -r "${INFORMATION}"; } > ${out}
 	echo ${REPLY}
 }
 
@@ -204,10 +217,10 @@ check() {
 	else
 		errno=${errno:-${?}}
 	fi
-	[ 0 -eq "${errno}" ] && __tag "${PASS}" || case ${level} in
-		warn) __tag "${WARN}" ;;
-		error) __tag "${ERROR}"; echo "${*}"; echo "${output}"|sed '$,/^\s*$/d' ;;
-		fatal) __tag "${FAIL}";  echo "${*}"; echo "${output}"|sed '$,/^\s*$/d'; exit ${errno} ;;
+	[ 0 -eq "${errno}" ] && __tag "${SUCCESS}" || case ${level} in
+		warn) __tag "${WARNING}" ;;
+		error) __tag "${FAILURE}"; echo "${*}"; echo "${output}"|sed '$,/^\s*$/d' ;;
+		fatal) __tag "${FAILURE}"; echo "${*}"; echo "${output}"|sed '$,/^\s*$/d'; exit ${errno} ;;
 	esac
 	return ${errno}
 }

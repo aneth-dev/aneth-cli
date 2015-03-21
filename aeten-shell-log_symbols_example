@@ -1,0 +1,13 @@
+INFORMATION='  '
+WARNING='  '
+SUCCESS='  '
+FAILURE='  '
+OPEN_BRACKET=""
+CLOSE_BRACKET=""
+TAG_LENGTH=3
+
+#INVALID_REPLY_MESSAGE='%s: Invalid reply (%s was expected).'
+#YES_DEFAULT='[Yes|no]:'
+#NO_DEFAULT='[yes|No]:'
+#YES_PATTERN='y|yes|Yes|YES'
+#NO_PATTERN='n|no|No|NO'
