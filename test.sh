@@ -4,6 +4,7 @@ title Simple logging messages
 inform An information message
 warn A warning message
 error An error message
+( fatal --errno 2 A fatal error )
 
 title Simple checks
 check --level warn --message "No warning occured." return 0

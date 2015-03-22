@@ -81,6 +81,7 @@ __tag() {
 	local eol
 	local restore
 	local moveup
+	local tag
 	eol="\n"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
@@ -91,7 +92,18 @@ __tag() {
 		esac
 		shift
 	done
-	printf "${moveup}\r${OPEN_BRACKET}${1}${CLOSE_BRACKET}${restore}${eol}" >${OUTPUT}
+	case "${1}" in
+		info|inform) tag=${INFORMATION} ;;
+		success)     tag=${SUCCESS};;
+		warn)        tag=${WARNING};;
+		error)       tag=${FAILURE};;
+		fatal)       tag=${FAILURE};;
+		query)       tag=${QUERY};;
+		confirm)     tag=${ANSWERED};;
+		verbose)     tag=${VERBOSE};;
+		*)           tag=${1};;
+	esac
+	printf "${moveup}\r${OPEN_BRACKET}${tag}${CLOSE_BRACKET}${restore}${eol}" >${OUTPUT}
 }
 
 __log() {
@@ -137,9 +149,25 @@ error() {
 }
 
 fatal() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
+	local usage
+	local errno
+	usage="${FUNCNAME:-${0}} [--help|h] [--errno|-e <errno>] [--] <message>"
+	errno=1
+
+	while [ ${#} -ne 0 ]; do
+		case "${1}" in
+			--errno|-e)   errno=${2}; shift ;;
+			--help|-h)    echo "${usage}" >&2; exit 0 ;;
+			--)           shift; break ;;
+			-*)           echo "Usage: ${usage}" >&2; exit 1 ;;
+			*)            break ;;
+		esac
+		shift
+	done
+	[ 0 -lt ${#} ] || { echo "Usage: ${usage}" >&2 ; exit 2; }
+
 	__log "${FAILURE}" "${*}"
-	exit 1
+	exit ${errno}
 }
 
 query() {
@@ -252,24 +280,22 @@ check() {
 		eval "${*}" 2>&1 1>${OUTPUT}
 	else
 		__log -s -n "${EMPTY_TAG}" "${message}"
-		output=$(eval "${*}" 2>&1|sed '$,/^\s*$/d')
+		output=$(eval "${*}" 2>&1)
 	fi
 	if [ 0 -eq ${?} ]; then
 		errno=0
 	else
 		errno=${errno:-${?}}
 	fi
-	[ 0 -eq "${errno}" ] && { ${verbose} && success "${message}" || __tag "${SUCCESS}"; } || {
-		if [ ${level} = warn ]; then
-			${verbose} && warn "${message}" || __tag "${WARNING}"
-		else
-			${verbose} && ${level} "${message}" || {
-				__tag "${FAILURE}"
-				echo "${*}\n${output}" >${OUTPUT};
-			}
-			[ fatal = ${level} ] && exit ${errno}
-		fi
-	}
+	if [ 0 -eq ${errno} ]; then
+		${verbose} && success "${message}" || __tag success
+	else
+		${verbose} && ${level} "${message}" || {
+			__tag ${level}
+			echo "${*}\n${output}"|sed '$,/^\s*$/d' >${OUTPUT};
+		}
+		[ fatal = ${level} ] && exit ${errno}
+	fi
 	return ${errno}
 }
 
