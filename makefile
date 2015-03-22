@@ -3,27 +3,39 @@ lib := $(prefix)/lib
 
 CUR_DIR = $(shell readlink -f "$(CURDIR)")
 LIB_DIR = $(shell readlink -f "$$(test '$(lib)' = '$$(pwd)' && echo $(lib) || echo $(lib))")
-SCRIPT = aeten-cli.sh
-COMMANDS = $(shell . $$(pwd)/$(SCRIPT) ; __api $(SCRIPT))
+CLI = aeten-cli.sh
+COMMANDS = $(shell . $$(pwd)/$(CLI) ; __api $(CLI))
 LINKS = $(addprefix $(prefix)/bin/,$(COMMANDS))
-MAKE_INCLUDE = $(addprefix $(LIB_DIR)/,$(SCRIPT:%.sh=%.mk))
+MAKE_INCLUDE = $(addprefix $(LIB_DIR)/,$(CLI:%.sh=%.mk))
+check = @./$(CLI) check
 
-.PHONY: install uninstall
+.PHONY: all clean test install uninstall
+
+all: $(CLI:%.sh=%.mk) test
+
+clean:
+	$(check) -m "Delete Æten CLI make include" rm -f $(CLI:%.sh=%.mk)
+
 install: $(LINKS) $(MAKE_INCLUDE)
 
 uninstall:
-	rm -f $(filter-out $(CUR_DIR)/$(SCRIPT),$(LIB_DIR)/$(SCRIPT)) $(LINKS) $(MAKE_INCLUDE)
+	$(check) -m "Uninstall Æten CLI lib" '[ "$(CUR_DIR)" = "$(LIB_DIR)" ] || rm $(LIB_DIR)/$(CLI)'
+	$(check) -m "Uninstall Æten CLI symlinks" rm $(LINKS)
+	$(check) -m "Uninstall Æten CLI make include" rm -f $(MAKE_INCLUDE)
 
 test:
-	@./test.sh
+	$(check) -m "Run Æten CLI tests" ./test.sh
 
 ifneq ($(LIB_DIR),$(CUR_DIR)) # Prevent circular dependency
 $(LIB_DIR)/%: %
-	cp $< $@
+	$(check) -m "Install Æten CLI lib $@" cp $< $@
 endif
 
-$(LINKS): $(LIB_DIR)/$(SCRIPT)
-	ln -s $< $@
+$(LINKS): $(LIB_DIR)/$(CLI)
+	$(check) -m "Install Æten CLI symlink $@" ln -s $< $@
 
-$(LIB_DIR)/%.mk: %.sh
-	( . ./$^ ; __api ./$^ ) | awk '{print $$0" = @$(LIB_DIR)/$^ "$$0}' > $@
+%.mk: %.sh
+	$(check) -m "Generate Æten CLI make include" '( . ./$^ ; __api ./$^ ) | awk '"'"'{print $$0" = @'$$(dirname $@)'/$^ "$$0}'"'"' > $@'
+
+$(LIB_DIR)/%.mk: %.mk
+	$(check) -m "Install Æten CLI make include" sed "s@$$(dirname $<|sed 's@.@\\.@g')@$(LIB_DIR)@" $< > $@
