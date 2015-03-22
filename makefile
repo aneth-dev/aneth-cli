@@ -35,7 +35,7 @@ $(LINKS): $(LIB_DIR)/$(CLI)
 	$(check) -m "Install Æten CLI symlink $@" ln -s $< $@
 
 %.mk: %.sh
-	$(check) -m "Generate Æten CLI make include" '( . ./$^ ; __api ./$^ ) | awk '"'"'{print $$0" = @'$$(dirname $@)'/$^ "$$0}'"'"' > $@'
+	$(check) -m "Generate Æten CLI make include" '( . ./$^ ; __api ./$^ ) | awk '"'"'{print $$0" = '$$(dirname $@)'/$^ "$$0}'"'"' > $@'
 
 $(LIB_DIR)/%.mk: %.mk
 	$(check) -m "Install Æten CLI make include" sed "s@$$(dirname $<|sed 's@.@\\.@g')@$(LIB_DIR)@" $< > $@
