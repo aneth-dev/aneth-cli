@@ -3,7 +3,7 @@ lib := $(prefix)/lib
 
 CUR_DIR = $(shell readlink -f "$(CURDIR)")
 LIB_DIR = $(shell readlink -f "$$(test '$(lib)' = '$$(pwd)' && echo $(lib) || echo $(lib))")
-SCRIPT = aeten-shell-log.sh
+SCRIPT = aeten-cli.sh
 COMMANDS = $(shell . $$(pwd)/$(SCRIPT) ; __api $(SCRIPT))
 LINKS = $(addprefix $(prefix)/bin/,$(COMMANDS))
 MAKE_INCLUDE = $(addprefix $(LIB_DIR)/,$(SCRIPT:%.sh=%.mk))

@@ -6,10 +6,10 @@ __colorize() {
 	echo $(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${*}\033[0;0m" || echo "${*}")
 }
 
-[ -f /etc/aeten-shell-log ] && . /etc/aeten-shell-log
-[ -f ~/.aeten-shell-log ] && . ~/.aeten-shell-log
-[ -f ~/.config/aeten-shell-log ] && . ~/.config/aeten-shell-log
-[ -f ~/.etc/aeten-shell-log ] && . ~/.etc/aeten-shell-log
+[ -f /etc/aeten-cli ] && . /etc/aeten-cli
+[ -f ~/.aeten-cli ] && . ~/.aeten-cli
+[ -f ~/.config/aeten-cli ] && . ~/.config/aeten-cli
+[ -f ~/.etc/aeten-cli ] && . ~/.etc/aeten-cli
 
 : ${INFORMATION=INFO}
 : ${WARNING=WARN}

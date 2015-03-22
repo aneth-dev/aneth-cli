@@ -1,5 +1,5 @@
 #!/bin/sh
-. $(dirname $0)/aeten-shell-log.sh
+. $(dirname $0)/aeten-cli.sh
 title Simple logging messages
 inform An information message
 warn A warning message
