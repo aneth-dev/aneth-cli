@@ -1,0 +1,20 @@
+#!/bin/sh
+
+AETEN_CLI_INCLUDE=1
+. ./aeten-cli.sh
+
+aesh() {
+   local cmdline arg0
+   while true; do
+      printf '$ '
+      read cmdline
+      for arg in ${cmdline}; do
+         arg0=${arg}
+         break
+      done
+      __is_api ${arg0} || cmdline="check --verbose -- ${cmdline}"
+      ${cmdline}
+   done
+}
+
+aesh "${@}"
