@@ -17,6 +17,7 @@ __colorize() {
 : ${FAILURE=FAIL}
 : ${QUERY=WARN}
 : ${ANSWERED=INFO}
+: ${VERBOSE= => }
 : ${OPEN_BRACKET=[ }
 : ${CLOSE_BRACKET= ]}
 : ${INVALID_REPLY_MESSAGE=%s: Invalid reply (%s was expected).}
@@ -33,12 +34,14 @@ if [ 0 -eq ${TAG_LENGTH:-0} ]; then
 fi
 EMPTY_TAG=$(printf "%${TAG_LENGTH}s")
 unset TAG_LENGTH
+
 INFORMATION=$(__colorize '1;37m' "${INFORMATION}")
 QUERY=$(__colorize '1;33m' "${QUERY}")
 ANSWERED=$(__colorize '1;37m' "${ANSWERED}")
 WARNING=$(__colorize '1;33m' "${WARNING}")
 SUCCESS=$(__colorize '1;32m' "${SUCCESS}")
 FAILURE=$(__colorize '1;31m' "${FAILURE}")
+VERBOSE=$(__colorize '1;37m' "${VERBOSE}")
 OPEN_BRACKET=$(__colorize '0;37m' "${OPEN_BRACKET}")
 CLOSE_BRACKET=$(__colorize '0;37m' "${CLOSE_BRACKET}")
 TITLE_COLOR='1;37m'
@@ -48,8 +51,30 @@ MOVE_CURSOR_UP='\033[1A'
 MOVE_CURSOR_DOWN='\033[1B'
 CLEAR_LINE='\033[2K'
 
+__ppid() {
+	awk '{print $4}' /proc/${1}/stat 2>/dev/null
+}
+
+__out_fd() {
+	local pid
+	pid=${$}
+	while [ ${pid} -ne 1 ]; do
+		script=$(cat /proc/${pid}/cmdline | tr '\000' ' ' | awk '{print $2}')
+		pid=$(__ppid ${pid})
+		[ ${pid} -eq 1 ] && { pid=${$}; break; }
+		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__ppid ${pid}); break; }
+	done
+	echo /proc/${pid}/fd/${1}
+}
+
+OUTPUT=$(__out_fd 2)
+
 __api() {
 	sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
+}
+
+__is_api() {
+	test 1 -eq $(__api "${1}"|grep -F "$(basename ${1})"|wc -l) 2>/dev/null
 }
 
 __tag() {
@@ -66,7 +91,7 @@ __tag() {
 		esac
 		shift
 	done
-	printf "${moveup}\r${OPEN_BRACKET}${1}${CLOSE_BRACKET}${restore}${eol}"
+	printf "${moveup}\r${OPEN_BRACKET}${1}${CLOSE_BRACKET}${restore}${eol}" >${OUTPUT}
 }
 
 __log() {
@@ -83,16 +108,12 @@ __log() {
 		shift
 	done
 	level=${1}; shift
-	printf "\r${OPEN_BRACKET}${level}${CLOSE_BRACKET} ${*}${save}${eol}"
-}
-
-__ppid() {
-	awk '{print $4}' /proc/${1}/stat
+	printf "\r${CLEAR_LINE}${OPEN_BRACKET}${level}${CLOSE_BRACKET} ${*}${save}${eol}" >${OUTPUT}
 }
 
 title() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	echo $(__colorize ${TITLE_COLOR} "${*}")
+	echo $(__colorize ${TITLE_COLOR} "${*}") >${OUTPUT}
 }
 
 inform() {
@@ -122,21 +143,24 @@ fatal() {
 }
 
 query() {
-	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	local pid
+	local out
+	local usage
 	local out
 	local script
-	pid=${$}
-	while [ ${pid} -ne 1 ]; do
-		script=$(cat /proc/${pid}/cmdline | tr '\000' ' ' | awk '{print $2}')
-		pid=$(__ppid ${pid})
-		[ ${pid} -eq 1 ] && { pid=${$}; break; }
-		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__ppid ${pid}); break; }
+	usage="${FUNCNAME:-${0}} [--help|-h] [--] <message>"
+	while [ ${#} -ne 0 ]; do
+		case "${1}" in
+			--help|-h)     echo "${usage}" >&2; exit 0 ;;
+			--)            shift; break ;;
+			-*)            echo "Usage:\n${usage}" >&2; exit 3 ;;
+			*)             break ;;
+		esac
+		shift
 	done
-	out=/proc/${pid}/fd/1
+	[ 2 -eq $(basename ${OUTPUT}) ] && out=${OUTPUT} || out=$(__out_fd 2)
 	__log -n -s "${QUERY}" "${*} " > ${out}
 	read REPLY
-	{ [ -t 0 ] && __tag -r -u "${ANSWERED}" || __tag -r "${ANSWERED}"; } > ${out}
+	{ [ -t 0 ] && __tag -r -u "${ANSWERED}" || __tag -r "${ANSWERED}"; } >${out}
 	echo ${REPLY}
 }
 
@@ -148,6 +172,7 @@ confirm() {
 	local assert
 	local loop
 	local reply
+	local query_args
 	expected=${NO_DEFAULT}
 	yes_pattern=${YES_PATTERN}
 	no_pattern=${NO_PATTERN}
@@ -184,10 +209,10 @@ ${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <
 	done
 
 	while true; do
-		reply=$(query ${*} "${expected}")
-		echo "${reply}" | grep --extended-regexp "${yes_pattern}|${no_pattern}" 2>/dev/null 1>/dev/null && break
+		reply=$(query ${query_args} ${*} "${expected}")
+		echo "${reply}" | grep --extended-regexp "${yes_pattern}|${no_pattern}" 2>&1 1>/dev/null && break
 		if [ ${loop:-0} -eq 1 ]; then
-			printf "${INVALID_REPLY_MESSAGE}\n" "${reply}" "[${yes_pattern}|${no_pattern}]" >&2
+			printf "${INVALID_REPLY_MESSAGE}\n" "${reply}" "[${yes_pattern}|${no_pattern}]" >${OUTPUT}
 		else
 			break
 		fi
@@ -204,13 +229,16 @@ check() {
 	local errno
 	local output
 	local usage
+	local verbose
+	verbose=false
 	usage="${FUNCNAME:-${0}} [--level|-l warn|error|fatal] [--errno|-e <errno>] [--message|-m <message>] [--] <command>"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
 			--message|-m) message=${2}; shift ;;
 			--level|-l)   level=${2}; shift ;;
 			--errno|-e)   errno=${2}; shift ;;
-			--help|-h)    echo "${usage}"; exit 0 ;;
+			--verbose|-v) verbose=true ;;
+			--help|-h)    echo "${usage}" >&2; exit 0 ;;
 			--)           shift; break ;;
 			-*)           echo "Usage: ${usage}" >&2; exit 3 ;;
 			*)            break ;;
@@ -219,24 +247,35 @@ check() {
 	done
 	: ${level=fatal}
 	: ${message=${*}}
-	__log -s -n "${EMPTY_TAG}" "${message}"
-	output=$(eval "${*}" 2>&1)
+	if $verbose; then
+		__log -s "${VERBOSE}" "${message}"
+		eval "${*}" 2>&1 1>${OUTPUT}
+	else
+		__log -s -n "${EMPTY_TAG}" "${message}"
+		output=$(eval "${*}" 2>&1|sed '$,/^\s*$/d')
+	fi
 	if [ 0 -eq ${?} ]; then
 		errno=0
 	else
 		errno=${errno:-${?}}
 	fi
-	[ 0 -eq "${errno}" ] && __tag "${SUCCESS}" || case ${level} in
-		warn) __tag "${WARNING}" ;;
-		error) __tag "${FAILURE}"; echo "${*}"; echo "${output}"|sed '$,/^\s*$/d' ;;
-		fatal) __tag "${FAILURE}"; echo "${*}"; echo "${output}"|sed '$,/^\s*$/d'; exit ${errno} ;;
-	esac
+	[ 0 -eq "${errno}" ] && { ${verbose} && success "${message}" || __tag "${SUCCESS}"; } || {
+		if [ ${level} = warn ]; then
+			${verbose} && warn "${message}" || __tag "${WARNING}"
+		else
+			${verbose} && ${level} "${message}" || {
+				__tag "${FAILURE}"
+				echo "${*}\n${output}" >${OUTPUT};
+			}
+			[ fatal = ${level} ] && exit ${errno}
+		fi
+	}
 	return ${errno}
 }
 
-if [ 0 -eq ${SHELL_LOG_INCLUDE=0} ] && [ -L "${0}" ] && [ 1 -eq $(__api "${0}"|grep "$(basename ${0})"|wc -l) ]; then
+if [ 0 -eq ${AETEN_CLI_INCLUDE=0} ] && [ -L "${0}" ] && __is_api "${0}"; then
 	$(basename ${0}) "${@}"
-elif [ 0 -eq ${SHELL_LOG_INCLUDE} ] && [ ! -L "${0}" ]; then
+elif [ 0 -eq ${AETEN_CLI_INCLUDE} ] && [ ! -L "${0}" ]; then
 	cmd=${1}
 	if [ 1 -eq $(__api "${0}"|grep "${cmd}"|wc -l) ]; then
 		shift
