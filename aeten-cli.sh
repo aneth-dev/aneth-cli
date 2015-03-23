@@ -303,7 +303,7 @@ if [ 0 -eq ${AETEN_CLI_INCLUDE=0} ] && [ -L "${0}" ] && __is_api "${0}"; then
 	$(basename ${0}) "${@}"
 elif [ 0 -eq ${AETEN_CLI_INCLUDE} ] && [ ! -L "${0}" ]; then
 	cmd=${1}
-	if [ 1 -eq $(__api "${0}"|grep "${cmd}"|wc -l) ]; then
+	if [ 1 -eq $(__api "${0}"|grep -- "${cmd}"|wc -l) ]; then
 		shift
 		${cmd} "${@}"
 	fi
