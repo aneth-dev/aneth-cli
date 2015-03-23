@@ -6,15 +6,26 @@ __colorize() {
 	echo $(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${*}\033[0;0m" || echo "${*}")
 }
 
+LEVEL_FATAL=0
+LEVEL_ERROR=$((${LEVEL_FATAL}+1))
+LEVEL_WARNING=$((${LEVEL_ERROR}+1))
+LEVEL_INFORMATION=$((${LEVEL_WARNING}+1))
+LEVEL_INFO=${LEVEL_INFORMATION}
+LEVEL_DEBUG=$((${LEVEL_INFORMATION}+1))
+LEVEL_TRACE=$((${LEVEL_DEBUG}+1))
+
 [ -f /etc/aeten-cli ] && . /etc/aeten-cli
 [ -f ~/.aeten-cli ] && . ~/.aeten-cli
 [ -f ~/.config/aeten-cli ] && . ~/.config/aeten-cli
 [ -f ~/.etc/aeten-cli ] && . ~/.etc/aeten-cli
 
+: ${LEVEL=${LEVEL_INFO}}
 : ${INFORMATION=INFO}
 : ${WARNING=WARN}
-: ${SUCCESS=PASS}
+: ${SUCCESS= OK }
 : ${FAILURE=FAIL}
+: ${DEBUG=DEBU}
+: ${TRACE=TRAC}
 : ${QUERY=WARN}
 : ${ANSWERED=INFO}
 : ${VERBOSE= => }
@@ -41,6 +52,8 @@ ANSWERED=$(__colorize '1;37m' "${ANSWERED}")
 WARNING=$(__colorize '1;33m' "${WARNING}")
 SUCCESS=$(__colorize '1;32m' "${SUCCESS}")
 FAILURE=$(__colorize '1;31m' "${FAILURE}")
+DEBUG=$(__colorize '1;34m' "${DEBUG}")
+TRACE=$(__colorize '1;34m' "${TRACE}")
 VERBOSE=$(__colorize '1;37m' "${VERBOSE}")
 OPEN_BRACKET=$(__colorize '0;37m' "${OPEN_BRACKET}")
 CLOSE_BRACKET=$(__colorize '0;37m' "${CLOSE_BRACKET}")
@@ -106,6 +119,10 @@ __tag() {
 	printf "${moveup}\r${OPEN_BRACKET}${tag}${CLOSE_BRACKET}${restore}${eol}" >${OUTPUT}
 }
 
+__is_log_enable() {
+	[ ${LEVEL} -ge $(__get_log_level ${1}) ] && echo true || echo false
+}
+
 __log() {
 	local level
 	local eol
@@ -130,22 +147,22 @@ title() {
 
 inform() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${INFORMATION}" "${*}"
+	$(__is_log_enable info) && __log "${INFORMATION}" "${*}"
 }
 
 success() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${SUCCESS}" "${*}"
+	$(__is_log_enable info) && __log "${SUCCESS}" "${*}"
 }
 
 warn() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${WARNING}" "${*}"
+	$(__is_log_enable warn) && __log "${WARNING}" "${*}"
 }
 
 error() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	__log "${FAILURE}" "${*}"
+	$(__is_log_enable error) && __log "${FAILURE}" "${*}"
 }
 
 fatal() {
@@ -165,9 +182,46 @@ fatal() {
 		shift
 	done
 	[ 0 -lt ${#} ] || { echo "Usage: ${usage}" >&2 ; exit 2; }
-
-	__log "${FAILURE}" "${*}"
+	$(__is_log_enable fatal) && __log "${FAILURE}" "${*}"
 	exit ${errno}
+}
+
+debug() {
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
+	$(__is_log_enable debug) && __log "${DEBUG}" "${*}"
+}
+
+trace() {
+	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
+	$(__is_log_enable trace) && __log "${TRACE}" "${*}"
+}
+
+aeten_cli_get_log_level() {
+	case "${LEVEL}" in
+		${LEVEL_FATAL})       echo fatal;;
+		${LEVEL_ERROR})       echo error;;
+		${LEVEL_WARNING})     echo warn;;
+		${LEVEL_INFORMATION}) echo info;;
+		${LEVEL_DEBUG})       echo debug;;
+		${LEVEL_TRACE})       echo trace;;
+		*) echo "Usage: ${FUNCNAME:-${0}} fatal|error|warn|info|debug|trace" >&2 ; exit 1;;
+	esac
+}
+
+__get_log_level() {
+	case "${1}" in
+		fatal)                   echo ${LEVEL_FATAL};;
+		error)                   echo ${LEVEL_ERROR};;
+		warn|warning)            echo ${LEVEL_WARNING};;
+		info|inform|information) echo ${LEVEL_INFORMATION} ;;
+		debug)                   echo ${LEVEL_DEBUG};;
+		trace)                   echo ${LEVEL_TRACE};;
+		*) echo "Usage: ${FUNCNAME:-${0}} fatal|error|warn|info|debug|trace" >&2 ; exit 1;;
+	esac
+}
+
+aeten_cli_set_log_level() {
+	LEVEL=$(__get_log_level ${1})
 }
 
 query() {
@@ -258,6 +312,7 @@ check() {
 	local output
 	local usage
 	local verbose
+	local is_log_enable
 	verbose=false
 	usage="${FUNCNAME:-${0}} [--level|-l warn|error|fatal] [--errno|-e <errno>] [--message|-m <message>] [--] <command>"
 	while [ ${#} -ne 0 ]; do
@@ -275,12 +330,21 @@ check() {
 	done
 	: ${level=fatal}
 	: ${message=${*}}
+	is_log_enable=$(__is_log_enable ${level})
 	if $verbose; then
-		__log -s "${VERBOSE}" "${message}"
-		eval "${*}" 2>&1 1>${OUTPUT}
+		if ${is_log_enable}; then
+			__log -s "${VERBOSE}" "${message}"
+			eval "${*}" 2>&1 1>${OUTPUT}
+		else
+			eval "${*}" 2>&1 1>/dev/null
+		fi
 	else
-		__log -s -n "${EMPTY_TAG}" "${message}"
-		output=$(eval "${*}" 2>&1)
+		if ${is_log_enable}; then
+			__log -s -n "${EMPTY_TAG}" "${message}"
+			output=$(eval "${*}" 2>&1)
+		else
+			eval "${*}" 2>&1 1>/dev/null
+		fi
 	fi
 	if [ 0 -eq ${?} ]; then
 		errno=0
@@ -288,11 +352,13 @@ check() {
 		errno=${errno:-${?}}
 	fi
 	if [ 0 -eq ${errno} ]; then
-		${verbose} && success "${message}" || __tag success
+		${verbose} && success "${message}" || ${is_log_enable} && __tag success
 	else
 		${verbose} && ${level} "${message}" || {
-			__tag ${level}
-			echo "${*}\n${output}"|sed '$,/^\s*$/d' >${OUTPUT};
+			if ${is_log_enable}; then
+				__tag ${level}
+				printf "%s\n%s" "${*}" "${output}"|sed '$,/^\s*$/d' >${OUTPUT};
+			fi
 		}
 		[ fatal = ${level} ] && exit ${errno}
 	fi
