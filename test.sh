@@ -30,6 +30,12 @@ check -m "Check if fatal error causes exit." test ${?} -eq 1
 check -l error --errno 2 -m "Raise an error and override return code to 2." return 1
 check echo '$?='${?}\; test ${?} -eq 2
 
+title Check verbosity
+check --verbose -m "A verbose success test." echo output '&&' return 0
+check -v -l error -m "A verbose failed test." echo output '&&' return 1
+check --quiet -m "A quiet success test (should not appear)." echo output '&&' return 0
+check -q -l error -m "A quiet failed test." echo output '&&' return 1
+
 title Query and reply
 answer=$( ( sleep 1;echo yes ) | query Will say '"yes"' in 1 second. )
 check -m 'Check if answer is "yes".' test "${answer}" = yes

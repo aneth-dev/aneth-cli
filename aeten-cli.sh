@@ -312,15 +312,18 @@ check() {
 	local output
 	local usage
 	local verbose
+	local quiet
 	local is_log_enable
 	verbose=false
-	usage="${FUNCNAME:-${0}} [--level|-l warn|error|fatal] [--errno|-e <errno>] [--message|-m <message>] [--] <command>"
+	quiet=false
+	usage="${FUNCNAME:-${0}} [--quiet|-q] [--verbose|-v] [--level|-l warn|error|fatal] [--errno|-e <errno>] [--message|-m <message>] [--] <command>"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
 			--message|-m) message=${2}; shift ;;
 			--level|-l)   level=${2}; shift ;;
 			--errno|-e)   errno=${2}; shift ;;
 			--verbose|-v) verbose=true ;;
+			--quiet|-q)   quiet=true ;;
 			--help|-h)    echo "${usage}" >&2; exit 0 ;;
 			--)           shift; break ;;
 			-*)           echo "Usage: ${usage}" >&2; exit 3 ;;
@@ -328,39 +331,41 @@ check() {
 		esac
 		shift
 	done
+	${verbose} && ${quiet} && echo "--quiet and --verbose are incompatible options.\nUsage: ${usage}" >&2 && exit 3
 	: ${level=fatal}
 	: ${message=${*}}
 	is_log_enable=$(__is_log_enable ${level})
 	if $verbose; then
 		if ${is_log_enable}; then
-			__log -s "${VERBOSE}" "${message}"
-			eval "${*}" 2>&1 1>${OUTPUT}
+			${quiet} || __log -s "${VERBOSE}" "${message}"
+			( eval "${*}" >&2 2>${OUTPUT} )
 		else
-			eval "${*}" 2>&1 1>/dev/null
+			( eval "${*}" 2>&1 1>/dev/null )
 		fi
-	else
-		if ${is_log_enable}; then
-			__log -s -n "${EMPTY_TAG}" "${message}"
-			output=$(eval "${*}" 2>&1)
-		else
-			eval "${*}" 2>&1 1>/dev/null
-		fi
+	elif ${is_log_enable}; then
+		${quiet} || __log -s -n "${EMPTY_TAG}" "${message}"
 	fi
+	output=$(eval "${*}" 2>&1)
 	if [ 0 -eq ${?} ]; then
 		errno=0
 	else
 		errno=${errno:-${?}}
 	fi
 	if [ 0 -eq ${errno} ]; then
-		${verbose} && success "${message}" || ${is_log_enable} && __tag success
+		if ${verbose} || ${quiet}; then
+			${quiet} || success "${message}"
+		else
+			${is_log_enable} && __tag success
+		fi
 	else
-		${verbose} && ${level} "${message}" || {
-			if ${is_log_enable}; then
-				__tag ${level}
-				printf "%s\n%s" "${*}" "${output}"|sed '$,/^\s*$/d' >${OUTPUT};
-			fi
-		}
-		[ fatal = ${level} ] && exit ${errno}
+		if ${verbose} || ${quiet}; then
+			${level} "${message}"
+		elif ${is_log_enable}; then
+			__tag ${level}
+			printf "%s\n%s\n" "${*}" "${output}"|sed '$,/^\s*/d' >${OUTPUT}
+			${level} "${message}"
+		fi
+		[ 'fatal' = ${level} ] && exit ${errno}
 	fi
 	return ${errno}
 }
