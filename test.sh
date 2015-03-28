@@ -1,5 +1,5 @@
 #!/bin/sh
-: ${CONFIG_FILE=$(dirname $0)/aeten-cli_config}
+: ${AETEN_CLI_CONFIG_FILE=$(dirname $0)/aeten-cli_config}
 . $(dirname $0)/aeten-cli.sh
 
 title Simple logging messages
@@ -41,7 +41,7 @@ check -q -l error -m "A quiet failed test." echo output '&&' return 1
 
 title Query and reply
 answer=$( ( sleep 1;echo yes ) | query Will say '"yes"' in 1 second. )
-check -m 'Check if answer is "yes".' test "${answer}" = yes
+check -m 'Check if answer is "yes".' test "'${answer}'" = yes
 
 title Confirm
 echo | confirm --yes '"yes" is default'
@@ -58,6 +58,5 @@ foo
 EOF
 check -m 'Check if third reply is negative.' test ${?} -eq 1
 
-
-[ "${CONFIG_FILE}" = $(dirname $0)/aeten-cli_config ] && CONFIG_FILE=$(dirname $0)/aeten-cli_symbols_config ${0} "${@}"
+[ "${AETEN_CLI_CONFIG_FILE}" = $(dirname $0)/aeten-cli_config ] && AETEN_CLI_CONFIG_FILE=$(dirname $0)/aeten-cli_symbols_config ${0} "${@}"
 exit 0
