@@ -1,9 +1,8 @@
 #!/bin/sh
 
 __colorize() {
-	local color=$1
-	shift
-	echo $(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${*}\033[0;0m" || echo "${*}")
+	local color="${1}"; shift
+	echo "$(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${@}\033[0;0m" || echo "${@}")"
 }
 
 LEVEL_FATAL=0
@@ -14,21 +13,22 @@ LEVEL_INFO=${LEVEL_INFORMATION}
 LEVEL_DEBUG=$((${LEVEL_INFORMATION}+1))
 LEVEL_TRACE=$((${LEVEL_DEBUG}+1))
 
-[ -f /etc/aeten-cli ] && . /etc/aeten-cli
-[ -f ~/.aeten-cli ] && . ~/.aeten-cli
-[ -f ~/.config/aeten-cli ] && . ~/.config/aeten-cli
-[ -f ~/.etc/aeten-cli ] && . ~/.etc/aeten-cli
+
+: ${CONFIG_FILE=$(for prefix in /etc/ ~/. ~/.config/ ~/.etc/; do echo ${prefix}aeten-cli; done)}
+for config_file in ${CONFIG_FILE}; do
+	[ -f ${config_file} ] && . ${config_file}
+done
 
 : ${LEVEL=${LEVEL_INFO}}
 : ${INFORMATION=INFO}
 : ${WARNING=WARN}
-: ${SUCCESS= OK }
+: ${SUCCESS=OK}
 : ${FAILURE=FAIL}
 : ${DEBUG=DEBU}
 : ${TRACE=TRAC}
 : ${QUERY=WARN}
 : ${ANSWERED=INFO}
-: ${VERBOSE= => }
+: ${VERBOSE==>}
 : ${OPEN_BRACKET=[ }
 : ${CLOSE_BRACKET= ]}
 : ${INVALID_REPLY_MESSAGE=%s: Invalid reply (%s was expected).}
@@ -36,25 +36,44 @@ LEVEL_TRACE=$((${LEVEL_DEBUG}+1))
 : ${NO_DEFAULT='[yes|No]:'}
 : ${YES_PATTERN='y|yes|Yes|YES'}
 : ${NO_PATTERN='n|no|No|NO'}
+
+__string_length() {
+	printf "${@}"|wc -m
+}
+
+__add_padding() {
+	local length
+	local string
+	local string_length
+	local padding_left
+	local padding_right
+	length=${1}; shift
+	string="${@}"
+	string_length=$(__string_length "${string}")
+	padding_left=$(( (${length}-${string_length}) / 2 ))
+	padding_right=$(( ${padding_left} + (${length}-${string_length}) % 2 ))
+	printf "%${padding_left}s%s%${padding_right}s" '' "${string}" ''
+}
+
 if [ 0 -eq ${TAG_LENGTH:-0} ]; then
 	TAG_LENGTH=0
 	for TAG in "${INFORMATION}" "${WARNING}" "${SUCCESS}" "${FAILURE}" "${QUERY}" "${ANSWERED}"; do
-		[ ${#TAG} -gt ${TAG_LENGTH} ] && TAG_LENGTH=${#TAG}
+		[ ${#TAG} -gt ${TAG_LENGTH} ] && TAG_LENGTH=$(__string_length "${TAG}")
 	done
 	unset TAG
 fi
-EMPTY_TAG=$(printf "%${TAG_LENGTH}s")
-unset TAG_LENGTH
+EMPTY_TAG=$(__add_padding ${TAG_LENGTH} '')
+TEXT_ALIGN="$(printf "%$(($(__string_length "${OPEN_BRACKET}${EMPTY_TAG}${CLOSE_BRACKET}") + 1))s" '')"
 
-INFORMATION=$(__colorize '1;37m' "${INFORMATION}")
-QUERY=$(__colorize '1;33m' "${QUERY}")
-ANSWERED=$(__colorize '1;37m' "${ANSWERED}")
-WARNING=$(__colorize '1;33m' "${WARNING}")
-SUCCESS=$(__colorize '1;32m' "${SUCCESS}")
-FAILURE=$(__colorize '1;31m' "${FAILURE}")
-DEBUG=$(__colorize '1;34m' "${DEBUG}")
-TRACE=$(__colorize '1;34m' "${TRACE}")
-VERBOSE=$(__colorize '1;37m' "${VERBOSE}")
+INFORMATION="$(__colorize '1;37m' "$(__add_padding ${TAG_LENGTH} "${INFORMATION}")")"
+QUERY="$(__colorize '1;33m' "$(__add_padding ${TAG_LENGTH} "${QUERY}")")"
+ANSWERED="$(__colorize '1;37m' "$(__add_padding ${TAG_LENGTH} "${ANSWERED}")")"
+WARNING="$(__colorize '1;33m' "$(__add_padding ${TAG_LENGTH} "${WARNING}")")"
+SUCCESS="$(__colorize '1;32m' "$(__add_padding ${TAG_LENGTH} "${SUCCESS}")")"
+FAILURE="$(__colorize '1;31m' "$(__add_padding ${TAG_LENGTH} "${FAILURE}")")"
+DEBUG="$(__colorize '1;34m' "$(__add_padding ${TAG_LENGTH} "${DEBUG}")")"
+TRACE="$(__colorize '1;34m' "$(__add_padding ${TAG_LENGTH} "${TRACE}")")"
+VERBOSE="$(__colorize '1;37m' "$(__add_padding ${TAG_LENGTH} "${VERBOSE}")")"
 OPEN_BRACKET=$(__colorize '0;37m' "${OPEN_BRACKET}")
 CLOSE_BRACKET=$(__colorize '0;37m' "${CLOSE_BRACKET}")
 TITLE_COLOR='1;37m'
@@ -106,17 +125,17 @@ __tag() {
 		shift
 	done
 	case "${1}" in
-		info|inform) tag=${INFORMATION} ;;
-		success)     tag=${SUCCESS};;
-		warn)        tag=${WARNING};;
-		error)       tag=${FAILURE};;
-		fatal)       tag=${FAILURE};;
-		query)       tag=${QUERY};;
-		confirm)     tag=${ANSWERED};;
-		verbose)     tag=${VERBOSE};;
-		*)           tag=${1};;
+		info|inform) tag="${INFORMATION}";;
+		success)     tag="${SUCCESS}";;
+		warn)        tag="${WARNING}";;
+		error)       tag="${FAILURE}";;
+		fatal)       tag="${FAILURE}";;
+		query)       tag="${QUERY}";;
+		confirm)     tag="${ANSWERED}";;
+		verbose)     tag="${VERBOSE}";;
+		*)           tag="${1}";;
 	esac
-	printf "${moveup}\r${OPEN_BRACKET}${tag}${CLOSE_BRACKET}${restore}${eol}" >${OUTPUT}
+	printf "${moveup}\r${OPEN_BRACKET}%s${CLOSE_BRACKET}${restore}${eol}" "${tag}" >${OUTPUT}
 }
 
 __is_log_enable() {
@@ -127,6 +146,7 @@ __log() {
 	local level
 	local eol
 	local save
+	local message
 	eol="\n"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
@@ -136,33 +156,36 @@ __log() {
 		esac
 		shift
 	done
-	level=${1}; shift
-	printf "\r${CLEAR_LINE}${OPEN_BRACKET}${level}${CLOSE_BRACKET} ${*}${save}${eol}" >${OUTPUT}
+	level="${1}"; shift
+	message="${@}"
+	printf "\r${CLEAR_LINE}${OPEN_BRACKET}%s${CLOSE_BRACKET} %s${save}${eol}" "${level}" "$message" >${OUTPUT}
 }
 
 title() {
+	local mesage
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	echo $(__colorize ${TITLE_COLOR} "${*}") >${OUTPUT}
+	message="${@}"
+	echo "${TEXT_ALIGN}$(__colorize ${TITLE_COLOR} "${message}")" >${OUTPUT}
 }
 
 inform() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__is_log_enable info) && __log "${INFORMATION}" "${*}"
+	$(__is_log_enable info) && __log "${INFORMATION}" "${@}"
 }
 
 success() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__is_log_enable info) && __log "${SUCCESS}" "${*}"
+	$(__is_log_enable info) && __log "${SUCCESS}" "${@}"
 }
 
 warn() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__is_log_enable warn) && __log "${WARNING}" "${*}"
+	$(__is_log_enable warn) && __log "${WARNING}" "${@}"
 }
 
 error() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__is_log_enable error) && __log "${FAILURE}" "${*}"
+	$(__is_log_enable error) && __log "${FAILURE}" "${@}"
 }
 
 fatal() {
@@ -173,8 +196,8 @@ fatal() {
 
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
-			--errno|-e)   errno=${2}; shift ;;
-			--help|-h)    echo "${usage}" >&2; exit 0 ;;
+			-e|--errno)   errno=${2}; shift ;;
+			-h|--help)    echo "${usage}" >&2; exit 0 ;;
 			--)           shift; break ;;
 			-*)           echo "Usage: ${usage}" >&2; exit 1 ;;
 			*)            break ;;
@@ -182,18 +205,18 @@ fatal() {
 		shift
 	done
 	[ 0 -lt ${#} ] || { echo "Usage: ${usage}" >&2 ; exit 2; }
-	$(__is_log_enable fatal) && __log "${FAILURE}" "${*}"
+	$(__is_log_enable fatal) && __log "${FAILURE}" "${@}"
 	exit ${errno}
 }
 
 debug() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__is_log_enable debug) && __log "${DEBUG}" "${*}"
+	$(__is_log_enable debug) && __log "${DEBUG}" "${@}"
 }
 
 trace() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__is_log_enable trace) && __log "${TRACE}" "${*}"
+	$(__is_log_enable trace) && __log "${TRACE}" "${@}"
 }
 
 aeten_cli_get_log_level() {
@@ -232,7 +255,7 @@ query() {
 	usage="${FUNCNAME:-${0}} [--help|-h] [--] <message>"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
-			--help|-h)     echo "${usage}" >&2; exit 0 ;;
+			-h|--help)     echo "${usage}" >&2; exit 0 ;;
 			--)            shift; break ;;
 			-*)            echo "Usage:\n${usage}" >&2; exit 3 ;;
 			*)             break ;;
@@ -276,13 +299,13 @@ ${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <
 "
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
-			--yes|-y)      expected=${YES_DEFAULT} ;;
-			--no|-n)       expected=${NO_DEFAULT} ;;
-			--assert|-a)   assert=1 ;;
-			--loop|-l)     loop=1 ;;
+			-y|--yes)      expected=${YES_DEFAULT} ;;
+			-n|--no)       expected=${NO_DEFAULT} ;;
+			-a|--assert)   assert=1 ;;
+			-l|--loop)     loop=1 ;;
 			--yes-pattern) yes_pattern=${2}; shift ;;
 			--no-pattern)  no_pattern=${2}; shift ;;
-			--help|-h)     echo "${usage}" >&2; exit 0 ;;
+			-h|--help)     echo "${usage}" >&2; exit 0 ;;
 			--)            shift; break ;;
 			-*)            echo "Usage:\n${usage}" >&2; exit 3 ;;
 			*)             break ;;
@@ -310,61 +333,58 @@ check() {
 	local message
 	local errno
 	local output
+	local mode
+	local mode_usage
 	local usage
-	local verbose
-	local quiet
 	local is_log_enable
-	verbose=false
-	quiet=false
 	usage="${FUNCNAME:-${0}} [--quiet|-q] [--verbose|-v] [--level|-l warn|error|fatal] [--errno|-e <errno>] [--message|-m <message>] [--] <command>"
+	mode_usage="--quiet and --verbose are incompatible options.\nUsage: ${usage}"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
-			--message|-m) message=${2}; shift ;;
-			--level|-l)   level=${2}; shift ;;
-			--errno|-e)   errno=${2}; shift ;;
-			--verbose|-v) verbose=true ;;
-			--quiet|-q)   quiet=true ;;
-			--help|-h)    echo "${usage}" >&2; exit 0 ;;
+			-m|--message) message=${2}; shift ;;
+			-l|--level)   level=${2}; shift ;;
+			-e|--errno)   errno=${2}; shift ;;
+			-v|--verbose) [ -z ${mode:-} ] && mode=verbose || { echo "Usage: ${mode_usage}" >&2; exit 3; } ;;
+			-q|--quiet)   [ -z ${mode:-} ] && mode=quiet   || { echo "Usage: ${mode_usage}" >&2; exit 3; } ;;
+			-h|--help)    echo "${usage}" >&2; exit 0 ;;
 			--)           shift; break ;;
 			-*)           echo "Usage: ${usage}" >&2; exit 3 ;;
 			*)            break ;;
 		esac
 		shift
 	done
-	${verbose} && ${quiet} && echo "--quiet and --verbose are incompatible options.\nUsage: ${usage}" >&2 && exit 3
+	unset mode_usage
+	unset usage
 	: ${level=fatal}
-	: ${message=${*}}
 	is_log_enable=$(__is_log_enable ${level})
-	if $verbose; then
-		if ${is_log_enable}; then
-			${quiet} || __log -s "${VERBOSE}" "${message}"
-			( eval "${*}" >&2 2>${OUTPUT} )
-		else
-			( eval "${*}" 2>&1 1>/dev/null )
-		fi
+	: ${mode=${is_log_enable}}
+	: ${message=${*}}
+	case ${mode} in
+		verbose) ${is_log_enable} && {
+		         	__log -s "${VERBOSE}" "${message}"
+		         	( eval "${*}" >&2 2>${OUTPUT} )
+		         } || output=$(eval "${*}" 2>&1);;
+		quiet)   output=$(eval "${*}" 2>&1);;
+		*)       ${is_log_enable} && __log -s -n "${EMPTY_TAG}" "${message}"
+		         output=$(eval "${*}" 2>&1);;
+	esac
+	[ 0 -eq ${?} ] && errno=0 || errno=${errno:-${?}}
+	if [ 0 -eq ${errno} ] && ${is_log_enable}; then
+		case ${mode} in
+			verbose) success "${message}";;
+			quiet)   ;;
+			*)       __tag success;;
+		esac
 	elif ${is_log_enable}; then
-		${quiet} || __log -s -n "${EMPTY_TAG}" "${message}"
-	fi
-	output=$(eval "${*}" 2>&1)
-	if [ 0 -eq ${?} ]; then
-		errno=0
-	else
-		errno=${errno:-${?}}
-	fi
-	if [ 0 -eq ${errno} ]; then
-		if ${verbose} || ${quiet}; then
-			${quiet} || success "${message}"
-		else
-			${is_log_enable} && __tag success
-		fi
-	else
-		if ${verbose} || ${quiet}; then
-			${level} "${message}"
-		elif ${is_log_enable}; then
-			__tag ${level}
-			printf "%s\n%s\n" "${*}" "${output}"|sed '$,/^\s*/d' >${OUTPUT}
-			${level} "${message}"
-		fi
+		case ${mode} in
+			verbose)${level} "${message}";;
+			quiet)  __log -s "${VERBOSE}" "${message}"
+			        printf "%s\n%s" "${*}" "${output}" >${OUTPUT}
+			        ${level} "${message}";;
+			*)      __tag verbose
+			        printf "%s\n%s" "${*}" "${output}" >${OUTPUT}
+			        ${level} "${message}";;
+		esac
 		[ 'fatal' = ${level} ] && exit ${errno}
 	fi
 	return ${errno}

@@ -1,5 +1,7 @@
 #!/bin/sh
+: ${CONFIG_FILE=$(dirname $0)/aeten-cli_config}
 . $(dirname $0)/aeten-cli.sh
+
 title Simple logging messages
 inform An information message
 warn A warning message
@@ -33,6 +35,7 @@ check echo '$?='${?}\; test ${?} -eq 2
 title Check verbosity
 check --verbose -m "A verbose success test." echo output '&&' return 0
 check -v -l error -m "A verbose failed test." echo output '&&' return 1
+inform 'A quiet success test follow and should not appear.'
 check --quiet -m "A quiet success test (should not appear)." echo output '&&' return 0
 check -q -l error -m "A quiet failed test." echo output '&&' return 1
 
@@ -54,3 +57,7 @@ no
 foo
 EOF
 check -m 'Check if third reply is negative.' test ${?} -eq 1
+
+
+[ "${CONFIG_FILE}" = $(dirname $0)/aeten-cli_config ] && CONFIG_FILE=$(dirname $0)/aeten-cli_symbols_config ${0} "${@}"
+exit 0
