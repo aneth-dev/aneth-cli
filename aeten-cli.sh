@@ -103,11 +103,11 @@ __aeten_cli_out_fd() {
 AETEN_CLI_OUTPUT=$(__aeten_cli_out_fd 2)
 
 __aeten_cli_api() {
-	sed --quiet --regexp-extended 's/(^[[:alnum:]][[:alnum:]_-]*)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
+	sed --quiet --regexp-extended 's/^aeten_cli_([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
 }
 
 __aeten_cli_is_api() {
-	test 1 -eq $(__aeten_cli_api "${1}"|grep -F "$(basename ${1})"|wc -l) 2>/dev/null
+	test 1 -eq $(__aeten_cli_api "${1}"|grep -F "${2}"|wc -l) 2>/dev/null
 }
 
 __aeten_cli_tag() {
@@ -162,34 +162,34 @@ __aeten_cli_log() {
 	printf "\r${AETEN_CLI_CLEAR_LINE}${AETEN_CLI_OPEN_BRACKET}%s${AETEN_CLI_CLOSE_BRACKET} %s${save}${eol}" "${level}" "$message" >${AETEN_CLI_OUTPUT}
 }
 
-title() {
+aeten_cli_title() {
 	local mesage
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	message="${@}"
 	echo "${AETEN_CLI_TEXT_ALIGN}$(__aeten_cli_colorize ${AETEN_CLI_TITLE_COLOR} "${message}")" >${AETEN_CLI_OUTPUT}
 }
 
-inform() {
+aeten_cli_inform() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	$(__aeten_cli_is_log_enable info) && __aeten_cli_log "${AETEN_CLI_INFORMATION}" "${@}"
 }
 
-success() {
+aeten_cli_success() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	$(__aeten_cli_is_log_enable info) && __aeten_cli_log "${AETEN_CLI_SUCCESS}" "${@}"
 }
 
-warn() {
+aeten_cli_warn() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	$(__aeten_cli_is_log_enable warn) && __aeten_cli_log "${AETEN_CLI_WARNING}" "${@}"
 }
 
-error() {
+aeten_cli_error() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	$(__aeten_cli_is_log_enable error) && __aeten_cli_log "${AETEN_CLI_FAILURE}" "${@}"
 }
 
-fatal() {
+aeten_cli_fatal() {
 	local usage
 	local errno
 	usage="${FUNCNAME:-${0}} [--help|h] [--errno|-e <errno>] [--] <message>"
@@ -210,13 +210,12 @@ fatal() {
 	exit ${errno}
 }
 
-debug() {
+aeten_cli_debug() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	echo $(__aeten_cli_is_log_enable debug)
 	$(__aeten_cli_is_log_enable debug) && __aeten_cli_log "${AETEN_CLI_DEBUG}" "${@}"
 }
 
-trace() {
+aeten_cli_trace() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	$(__aeten_cli_is_log_enable trace) && __aeten_cli_log "${AETEN_CLI_TRACE}" "${@}"
 }
@@ -249,7 +248,7 @@ aeten_cli_set_log_level() {
 	AETEN_CLI_LEVEL=$(__aeten_cli_get_log_level ${1})
 }
 
-query() {
+aeten_cli_query() {
 	local out
 	local usage
 	local out
@@ -271,7 +270,7 @@ query() {
 	echo ${REPLY}
 }
 
-confirm() {
+aeten_cli_confirm() {
 	local expected
 	local yes_pattern
 	local no_pattern
@@ -316,7 +315,7 @@ ${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <
 	done
 
 	while true; do
-		reply=$(query ${query_args} ${*} "${expected}")
+		reply=$(aeten_cli_query ${query_args} ${*} "${expected}")
 		echo "${reply}" | grep --extended-regexp "${yes_pattern}|${no_pattern}" 2>&1 1>/dev/null && break
 		if [ ${loop:-0} -eq 1 ]; then
 			printf "${AETEN_CLI_INVALID_REPLY_MESSAGE}\n" "${reply}" "[${yes_pattern}|${no_pattern}]" >${AETEN_CLI_OUTPUT}
@@ -330,7 +329,7 @@ ${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <
 	[ ${assert:-0} -eq 0 ] && { [ ${expected} = ${AETEN_CLI_YES_DEFAULT} ] && return 0 || return 1; } || return 2
 }
 
-check() {
+aeten_cli_check() {
 	local level
 	local message
 	local errno
@@ -373,7 +372,7 @@ check() {
 	[ 0 -eq ${?} ] && errno=0 || errno=${errno:-${?}}
 	if [ 0 -eq ${errno} ] && ${is_log_enable}; then
 		case ${mode} in
-			verbose) success "${message}";;
+			verbose) aeten_cli_success "${message}";;
 			quiet)   ;;
 			*)       __aeten_cli_tag success;;
 		esac
@@ -382,22 +381,36 @@ check() {
 			verbose)${level} "${message}";;
 			quiet)  __aeten_cli_log -s "${AETEN_CLI_VERBOSE}" "${message}"
 			        printf "%s\n%s" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
-			        ${level} "${message}";;
+			        aeten_cli_${level} "${message}";;
 			*)      __aeten_cli_tag verbose
 			        printf "%s\n%s" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
-			        ${level} "${message}";;
+			        aeten_cli_${level} "${message}";;
 		esac
 		[ 'fatal' = ${level} ] && exit ${errno}
 	fi
 	return ${errno}
 }
 
-if [ 0 -eq ${AETEN_CLI_INCLUDE=0} ] && [ -L "${0}" ] && __aeten_cli_is_api "${0}"; then
-	$(basename ${0}) "${@}"
-elif [ 0 -eq ${AETEN_CLI_INCLUDE} ] && [ ! -L "${0}" ]; then
-	cmd=${1}
-	if [ 1 -eq $(__aeten_cli_api "${0}"|grep -- "${cmd}"|wc -l) ]; then
+aeten_cli_import() {
+	local api
+	local all
+	local import
+	all=$(__aeten_cli_api ${1})
+	api=$(echo "${all}"|paste -sd\|)
+	shift
+	[ "${1}" = all ] && [ 1 -eq ${#} ] && import="${all}" || import="${@}"
+	for cmd in ${import}; do
+		echo ${cmd}|grep -E ${api} >/dev/null || { echo "Unexpected token ${cmd}" >&2; exit 1; }
+		eval ${cmd}'() { aeten_cli_'${cmd}' "${@}"; }'
+	done
+}
+
+if [ aeten-cli.sh = $(basename $(readlink -f ${0})) ]; then
+	if __aeten_cli_is_api "${0}" "${0}"; then
+		aeten_cli_$(basename ${0}) "${@}"
+	elif [ ! -L ${0} ] && __aeten_cli_is_api "${0}" "${1}"; then {
+		aeten_cli_cmd=${1}
 		shift
-		${cmd} "${@}"
-	fi
+		aeten_cli_${aeten_cli_cmd} "${@}"
+	} fi
 fi

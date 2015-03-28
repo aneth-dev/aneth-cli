@@ -4,7 +4,7 @@ lib := $(prefix)/lib
 CUR_DIR = $(shell readlink -f "$(CURDIR)")
 LIB_DIR = $(shell readlink -f "$$(test '$(lib)' = '$$(pwd)' && echo $(lib) || echo $(lib))")
 CLI = aeten-cli.sh
-COMMANDS = $(shell . $$(pwd)/$(CLI) ; __api $(CLI))
+COMMANDS = $(shell . ./$(CLI) && __aeten_cli_api $(CLI))
 LINKS = $(addprefix $(prefix)/bin/,$(COMMANDS))
 MAKE_INCLUDE = $(addprefix $(LIB_DIR)/,$(CLI:%.sh=%.mk))
 check = @./$(CLI) check
@@ -35,7 +35,7 @@ $(LINKS): $(LIB_DIR)/$(CLI)
 	$(check) -m "Install Æten CLI symlink $@" ln -s $< $@
 
 %.mk: %.sh
-	$(check) -m "Generate Æten CLI make include" '( . ./$^ ; __api ./$^ ) | awk '"'"'{print $$0" = '$$(dirname $@)'/$^ "$$0}'"'"' > $@'
+	$(check) -m "Generate Æten CLI make include" '( . ./$^ ; __aeten_cli_api ./$^ ) | awk '"'"'{print $$0" = '$$(dirname $@)'/$^ "$$0}'"'"' > $@'
 
 $(LIB_DIR)/%.mk: %.mk
 	$(check) -m "Install Æten CLI make include" sed "s@$$(dirname $<|sed 's@.@\\.@g')@$(LIB_DIR)@" $< > $@

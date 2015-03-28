@@ -1,6 +1,7 @@
 #!/bin/sh
-: ${AETEN_CLI_CONFIG_FILE=$(dirname $0)/aeten-cli_config}
-. $(dirname $0)/aeten-cli.sh
+: ${AETEN_CLI_CONFIG_FILE="$(dirname $0)/aeten-cli_config"}
+. "$(dirname $0)/aeten-cli.sh"
+aeten_cli_import "$(dirname $0)/aeten-cli.sh" all
 
 title Simple logging messages
 inform An information message
@@ -8,11 +9,11 @@ warn A warning message
 error An error message
 ( fatal --errno 2 A fatal error )
 inform Set log level to trace
-aeten_cli_set_log_level trace
+set_log_level trace
 debug A debugging message
 trace A trace message
 inform Restore log level to info, a debugging message is following but not printed.
-aeten_cli_set_log_level info
+set_log_level info
 debug A debugging message which should not be printed
 
 title Simple checks
@@ -21,9 +22,9 @@ check -l warn -m "A warning occured." return 1
 check -l error -m "No error occured." return 0
 check -l error -m "An error occured." return 1
 inform Set log level to fatal, a check whith level set to error is following but not printed.
-aeten_cli_set_log_level fatal
+set_log_level fatal
 check -l error -m "This test must not appear." return 1
-aeten_cli_set_log_level info
+set_log_level info
 inform Restore log level to info
 
 title Check exit code
