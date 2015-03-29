@@ -1,0 +1,65 @@
+#!/bin/bash
+PREFIX=/usr/local
+LIB=${PREFIX}/lib
+
+add-prefix() {
+   local prefix
+   prefix=${1}; shift
+   echo "${@}"|sed "s@.*@${prefix}\0@"
+}
+
+LIB_DIR=$(readlink -f "${LIB}")
+CLI=aeten-cli.sh
+COMMANDS=$(. ./${CLI} && __aeten_cli_api ${CLI} | grep -v '^import$')
+LINKS=$(add-prefix ${PREFIX}/bin/ "${COMMANDS}")
+MAKE_INCLUDE=$(add-prefix ${LIB_DIR}/ "${CLI/.sh/.mk}")
+check="./${CLI} check"
+
+$(./${CLI} include all)
+
+link-build() {
+   local link
+   for link in ${LINKS}; do
+      echo "build ${link}: symlink ${LIB_DIR}/${CLI}"
+   done
+}
+
+cat <<EOF >build.ninja
+rule lib
+   command = ${check} -m "Install Æten CLI lib \$out" cp \$in \$out
+
+rule symlink
+   command = ${check} -m "Install Æten CLI symlink \$out" ln -s \$in \$out
+
+rule uninstall
+   command = ${check} -m "Uninstall Æten CLI lib" '[ \$\$(dirname ${LIB_DIR}) = . ] || rm ${LIB_DIR}/${CLI}'; \$
+            ${check} -m "Uninstall Æten CLI symlinks" rm $(echo ${LINKS}); \$
+            ${check} -m "Uninstall Æten CLI make include" rm -f ${MAKE_INCLUDE}
+
+rule test
+   command = ${check} -m "Run Æten CLI tests" ./test.sh
+
+rule clean
+   command = ${check} -m "Delete Æten CLI make include" rm -f ${CLI/.sh/.mk}
+
+rule make_include
+   command = ${check} -m "Generate Æten CLI make include \$out" '( . ./\$in; __aeten_cli_api \$in ) | awk '"'"'! /import/ {print \$\$0" = '\$\$(dirname \$out)'/\$in "\$\$0}'"'"' >\$out'
+
+rule make_include_install
+   command = ${check} -m "Install Æten CLI make include \$out" sed 's@\$\$(dirname \$in|sed "s@.@\\\\.@g")@${LIB_DIR}@' \$in '>' \$out
+
+build install: phony || $(echo ${LINKS})
+build uninstall: uninstall
+build ${LIB_DIR}/${CLI/.sh/.mk}: make_include_install ${CLI}
+build ${CLI/.sh/.mk}: make_include ${CLI}
+build clean: clean
+build test: test
+
+build ${LIB_DIR}/${CLI}: lib ${CLI}
+
+default test ${CLI/.sh/.mk}
+
+$(link-build)
+EOF
+
+# vim: set expandtab shiftwidth=3 softtabstop=3 tabstop=4:
