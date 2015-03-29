@@ -1,7 +1,6 @@
 #!/bin/sh
 : ${AETEN_CLI_CONFIG_FILE="$(dirname $0)/aeten-cli_config"}
-. "$(dirname $0)/aeten-cli.sh"
-aeten_cli_import "$(dirname $0)/aeten-cli.sh" all
+$($(dirname $0)/aeten-cli.sh import all)
 
 title Simple logging messages
 inform An information message

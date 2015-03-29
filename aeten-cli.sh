@@ -406,11 +406,11 @@ aeten_cli_import() {
 }
 
 if [ aeten-cli.sh = $(basename $(readlink -f ${0})) ]; then
-	if __aeten_cli_is_api "${0}" "${0}"; then
+	if __aeten_cli_is_api "$(readlink -f ${0})" "$(basename ${0})"; then
 		aeten_cli_$(basename ${0}) "${@}"
 	elif [ ! -L ${0} ] && __aeten_cli_is_api "${0}" "${1}"; then {
 		aeten_cli_cmd=${1}
 		shift
-		aeten_cli_${aeten_cli_cmd} "${@}"
+		[ import = "${aeten_cli_cmd}" ] && echo eval ". ${0} && aeten_cli_${aeten_cli_cmd} ${0} ${@}" || aeten_cli_${aeten_cli_cmd} "${@}"
 	} fi
 fi
