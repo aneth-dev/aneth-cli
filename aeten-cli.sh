@@ -207,7 +207,10 @@ aeten_cli_fatal() {
 	done
 	[ 0 -lt ${#} ] || { echo "Usage: ${usage}" >&2 ; exit 2; }
 	$(__aeten_cli_is_log_enable fatal) && __aeten_cli_log "${AETEN_CLI_FAILURE}" "${@}"
-	exit ${errno}
+	case "$(basename ${0})" in
+		fatal|check|aeten-cli.sh) kill -s ABRT ${PPID};;
+		*) exit ${errno};;
+	esac
 }
 
 aeten_cli_debug() {
