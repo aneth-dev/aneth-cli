@@ -52,7 +52,7 @@ target() {
 }
 
 generate() {
-	local usage="${0} [-b|--builder <ninja|make>] <template>
+	local usage="${0} [-t|--template <template.ninja>]
 ${0} [$(__api|paste -sd\|)] --help"
 	local template=template.ninja
 	local builder
@@ -72,7 +72,17 @@ ${0} [$(__api|paste -sd\|)] --help"
 		ninja);;
 		*) __usage "Invalid builder ${builder}\n${usage}";;
 	esac
-	eval sed $(cat /dev/stdin|sed -e ':a;N;$!ba;s/\\\n/\\x00/g'|sed --regexp-extended -e 's,^([[:alpha:]][[:alnum:]_-]*)\s*=\s*(.*), -e "s@\\@\\@\1\\@\\@@\2@g",'|sed ':a;N;$!ba;s/\n//g') ${template} | sed 's/\x00/\n/g' > $(dirname ${template})/build.${extension}
+	eval sed $(cat /dev/stdin |\
+		sed ':a
+			N
+			$!ba
+			s/\\\n/\\x00/g' |\
+		sed --regexp-extended 's,^([[:alpha:]][[:alnum:]_-]*)\s*=\s*(.*), -e "s%@@\1@@%\2%g",' |\
+		sed ':a
+			N
+			$!ba
+			s/\n//g') ${template} |\
+		sed 's/\x00/\n/g' > $(dirname ${template})/build.${extension}
 }
 
 if __is_api "${1}"; then
