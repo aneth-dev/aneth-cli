@@ -151,13 +151,13 @@ __aeten_cli_log() {
 	eol="\n"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
+			-l) level=${2}; shift;;
 			-s) save=${AETEN_CLI_SAVE_CURSOR_POSITION};;
 			-n) eol="";;
 			*) break;;
 		esac
 		shift
 	done
-	level="${1}"; shift
 	message="${@}"
 	printf "\r${AETEN_CLI_CLEAR_LINE}${AETEN_CLI_OPEN_BRACKET}%s${AETEN_CLI_CLOSE_BRACKET} %s${save}${eol}" "${level}" "$message" >${AETEN_CLI_OUTPUT}
 }
@@ -171,22 +171,22 @@ aeten_cli_title() {
 
 aeten_cli_inform() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable info) && __aeten_cli_log "${AETEN_CLI_INFORMATION}" "${@}"
+	$(__aeten_cli_is_log_enable info) && __aeten_cli_log -l "${AETEN_CLI_INFORMATION}" "${@}"
 }
 
 aeten_cli_success() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable info) && __aeten_cli_log "${AETEN_CLI_SUCCESS}" "${@}"
+	$(__aeten_cli_is_log_enable info) && __aeten_cli_log -l "${AETEN_CLI_SUCCESS}" "${@}"
 }
 
 aeten_cli_warn() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable warn) && __aeten_cli_log "${AETEN_CLI_WARNING}" "${@}"
+	$(__aeten_cli_is_log_enable warn) && __aeten_cli_log -l "${AETEN_CLI_WARNING}" "${@}"
 }
 
 aeten_cli_error() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable error) && __aeten_cli_log "${AETEN_CLI_FAILURE}" "${@}"
+	$(__aeten_cli_is_log_enable error) && __aeten_cli_log -l "${AETEN_CLI_FAILURE}" "${@}"
 }
 
 aeten_cli_fatal() {
@@ -206,7 +206,7 @@ aeten_cli_fatal() {
 		shift
 	done
 	[ 0 -lt ${#} ] || { echo "Usage: ${usage}" >&2 ; exit 2; }
-	$(__aeten_cli_is_log_enable fatal) && __aeten_cli_log "${AETEN_CLI_FAILURE}" "${@}"
+	$(__aeten_cli_is_log_enable fatal) && __aeten_cli_log -l "${AETEN_CLI_FAILURE}" "${@}"
 	case "$(basename ${0})" in
 		fatal|check|aeten-cli.sh) kill -s ABRT ${PPID};;
 		*) exit ${errno};;
@@ -215,12 +215,12 @@ aeten_cli_fatal() {
 
 aeten_cli_debug() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable debug) && __aeten_cli_log "${AETEN_CLI_DEBUG}" "${@}"
+	$(__aeten_cli_is_log_enable debug) && __aeten_cli_log -l "${AETEN_CLI_DEBUG}" "${@}"
 }
 
 aeten_cli_trace() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable trace) && __aeten_cli_log "${AETEN_CLI_TRACE}" "${@}"
+	$(__aeten_cli_is_log_enable trace) && __aeten_cli_log -l "${AETEN_CLI_TRACE}" "${@}"
 }
 
 aeten_cli_get_log_level() {
@@ -267,7 +267,7 @@ aeten_cli_query() {
 		shift
 	done
 	[ 2 -eq $(basename ${AETEN_CLI_OUTPUT}) ] && out=${AETEN_CLI_OUTPUT} || out=$(__aeten_cli_out_fd 2)
-	__aeten_cli_log -n -s "${AETEN_CLI_QUERY}" "${*} " > ${out}
+	__aeten_cli_log -n -s -l "${AETEN_CLI_QUERY}" "${*} " > ${out}
 	read REPLY
 	{ [ -t 0 ] && __aeten_cli_tag -r -u "${AETEN_CLI_ANSWERED}" || __aeten_cli_tag -r "${AETEN_CLI_ANSWERED}"; } >${out}
 	echo ${REPLY}
@@ -365,11 +365,11 @@ aeten_cli_check() {
 	: ${message="${@}"}
 	case ${mode} in
 		verbose) ${is_log_enable} && {
-		         	__aeten_cli_log -s "${AETEN_CLI_VERBOSE}" "${message}"
+		         	__aeten_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
 		         	( eval "${@}" >&2 2>${AETEN_CLI_OUTPUT} )
 		         } || output=$(eval "${@}" 2>&1);;
 		quiet)   output=$(eval "${@}" 2>&1);;
-		*)       ${is_log_enable} && __aeten_cli_log -s -n "${AETEN_CLI_EMPTY_TAG}" "${message}"
+		*)       ${is_log_enable} && __aeten_cli_log -s -n -l "${AETEN_CLI_EMPTY_TAG}" "${message}"
 		         output=$(eval "${@}" 2>&1);;
 	esac
 	[ 0 -eq ${?} ] && errno=0 || errno=${errno:-${?}}
@@ -382,7 +382,7 @@ aeten_cli_check() {
 	elif ${is_log_enable}; then
 		case ${mode} in
 			verbose)${level} "${message}";;
-			quiet)  __aeten_cli_log -s "${AETEN_CLI_VERBOSE}" "${message}"
+			quiet)  __aeten_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
 			        printf "%s\n%s" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
 			        aeten_cli_${level} "${message}";;
 			*)      __aeten_cli_tag verbose
