@@ -12,7 +12,7 @@ COMMANDS=$(. ./${CLI} && __aeten_cli_api ${CLI} | grep -v '^import$')
 LINKS=$(${addprefix} ${PREFIX}/bin/ ${COMMANDS})
 MAKE_INCLUDE=$(${addprefix} ${LIB_DIR}/ "${CLI/.sh/.mk}")
 
-$(./${CLI} include check)
+$(./${CLI} import check)
 
 check -m "Generates build.ninja" ./aeten-gen-build.bash <<EOF
 LIB_DIRNAME = $(dirname ${LIB_DIR})
