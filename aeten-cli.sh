@@ -36,6 +36,7 @@ done
 : ${AETEN_CLI_NO_DEFAULT='[yes|No]:'}
 : ${AETEN_CLI_YES_PATTERN='y|yes|Yes|YES'}
 : ${AETEN_CLI_NO_PATTERN='n|no|No|NO'}
+: ${AETEN_CLI_SHADOW=*}
 
 __aeten_cli_string_length() {
 	printf "${@}"|wc -m
@@ -82,6 +83,7 @@ AETEN_CLI_RESTORE_CURSOR_POSITION='\033[u'
 AETEN_CLI_MOVE_CURSOR_UP='\033[1A'
 AETEN_CLI_MOVE_CURSOR_DOWN='\033[1B'
 AETEN_CLI_CLEAR_LINE='\033[2K'
+AETEN_CLI_CLEAR_UNTIL_EOL='\033[K'
 
 __aeten_cli_ppid() {
 	awk '{print $4}' /proc/${1}/stat 2>/dev/null
@@ -91,12 +93,6 @@ __aeten_cli_out_fd() {
 	local script
 	local pid
 	pid=${$}
-	while [ ${pid} -ne 1 ]; do
-		script=$(cat /proc/${pid}/cmdline | tr '\000' ' ' | awk '{print $2}')
-		pid=$(__aeten_cli_ppid ${pid})
-		[ ${pid} -eq 1 ] && { pid=${$}; break; }
-		[ -f "${script}" ] && [ $(basename "${script}") = query ] && { pid=$(__aeten_cli_ppid ${pid}); break; }
-	done
 	echo /proc/${pid}/fd/${1}
 }
 
@@ -251,15 +247,60 @@ aeten_cli_set_log_level() {
 	AETEN_CLI_LEVEL=$(__aeten_cli_get_log_level ${1})
 }
 
+__read_shadow() {
+	local reply
+	local char
+	local numeric
+	local length
+	local new_length
+	local out
+	local return_code
+	out=${1}
+	length=0
+	(
+		trap "stty $(stty -g)" EXIT INT QUIT
+		stty -echo
+		stty raw
+		while true; do
+			char=$(dd bs=1 count=1 2>/dev/null)
+			numeric=$(printf "%d" "'${char}")
+			if [ ${numeric} -eq 3 ]; then
+				reply=
+				return 130
+			elif [ ${numeric} -eq 13 ]; then
+				break
+			elif [ ${numeric} -eq 127 ]; then
+				length=$(( $(__aeten_cli_string_length "${reply}") - 1 ))
+				[ ${length} -eq -1 ] && continue
+				reply=$(echo ${reply}|awk '{ string=substr($0, 0, '${length}'); print string; }')
+				printf "\b${AETEN_CLI_CLEAR_UNTIL_EOL}" >${out}
+			else
+				reply=${reply}${char}
+				new_length=$(__aeten_cli_string_length "${reply}")
+				[ ${new_length} -gt ${length} ] && printf "${AETEN_CLI_SHADOW}" >${out}
+				length=${new_length}
+			fi
+		done
+		echo ${reply}
+	)
+	return_code=$?
+	echo >${out}
+	return ${return_code}
+}
+
 aeten_cli_query() {
 	local out
 	local usage
 	local out
 	local script
+	local shadow
+	local return_code
+	shadow=false
 	usage="${FUNCNAME:-${0}} [--help|-h] [--] <message>"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
 			-h|--help)     echo "${usage}" >&2; exit 0 ;;
+			-s|--shadow)   shadow=true ;;
 			--)            shift; break ;;
 			-*)            echo "Usage:\n${usage}" >&2; exit 3 ;;
 			*)             break ;;
@@ -268,8 +309,14 @@ aeten_cli_query() {
 	done
 	[ 2 -eq $(basename ${AETEN_CLI_OUTPUT}) ] && out=${AETEN_CLI_OUTPUT} || out=$(__aeten_cli_out_fd 2)
 	__aeten_cli_log -n -s -l "${AETEN_CLI_QUERY}" "${*} " > ${out}
-	read REPLY
-	{ [ -t 0 ] && __aeten_cli_tag -r -u "${AETEN_CLI_ANSWERED}" || __aeten_cli_tag -r "${AETEN_CLI_ANSWERED}"; } >${out}
+	if ${shadow}; then
+		REPLY=$(__read_shadow ${out})
+	else
+		read REPLY
+	fi
+	return_code=$?
+	[ 0 -eq ${return_code} ] || return ${return_code}
+	__aeten_cli_tag -r $([ -t 0 ] && echo -u) "${AETEN_CLI_ANSWERED}" >${out}
 	echo ${REPLY}
 }
 
@@ -414,6 +461,6 @@ if [ aeten-cli.sh = $(basename $(readlink -f ${0})) ]; then
 	elif [ ! -L ${0} ] && __aeten_cli_is_api "${0}" "${1}"; then {
 		aeten_cli_cmd=${1}
 		shift
-		[ import = "${aeten_cli_cmd}" ] && echo eval ". ${0} && aeten_cli_${aeten_cli_cmd} ${0} ${@}" || aeten_cli_${aeten_cli_cmd} "${@}"
+		[ import = "${aeten_cli_cmd}" ] && echo eval ". ${0} && aeten_cli_${aeten_cli_cmd} ${0} \"${@}\"" || aeten_cli_${aeten_cli_cmd} "${@}"
 	} fi
 fi
