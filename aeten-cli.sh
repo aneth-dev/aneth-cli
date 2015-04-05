@@ -2,7 +2,7 @@
 
 __aeten_cli_colorize() {
 	local color="${1}"; shift
-	echo "$(test $(tput colors 2>/dev/null) -ge 8 && printf "\033[${color}${@}\033[0;0m" || echo "${@}")"
+	echo "$(test $(tput colors 2>/dev/null) -ge 8 && printf "$(printf "${color}"|tput -S)${@}$(tput sgr0)" || echo "${@}")"
 }
 
 AETEN_CLI_LEVEL_FATAL=0
@@ -28,6 +28,7 @@ done
 : ${AETEN_CLI_TRACE=TRAC}
 : ${AETEN_CLI_QUERY=WARN}
 : ${AETEN_CLI_ANSWERED=INFO}
+: ${AETEN_CLI_PROGRESS=}
 : ${AETEN_CLI_VERBOSE==>}
 : ${AETEN_CLI_OPEN_BRACKET=[ }
 : ${AETEN_CLI_CLOSE_BRACKET= ]}
@@ -66,24 +67,25 @@ fi
 AETEN_CLI_EMPTY_TAG=$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} '')
 AETEN_CLI_TEXT_ALIGN="$(printf "%$(($(__aeten_cli_string_length "${AETEN_CLI_OPEN_BRACKET}${AETEN_CLI_EMPTY_TAG}${AETEN_CLI_CLOSE_BRACKET}") + 1))s" '')"
 
-AETEN_CLI_INFORMATION="$(__aeten_cli_colorize '1;37m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_INFORMATION}")")"
-AETEN_CLI_QUERY="$(__aeten_cli_colorize '1;33m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_QUERY}")")"
-AETEN_CLI_ANSWERED="$(__aeten_cli_colorize '1;37m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_ANSWERED}")")"
-AETEN_CLI_WARNING="$(__aeten_cli_colorize '1;33m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_WARNING}")")"
-AETEN_CLI_SUCCESS="$(__aeten_cli_colorize '1;32m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_SUCCESS}")")"
-AETEN_CLI_FAILURE="$(__aeten_cli_colorize '1;31m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_FAILURE}")")"
-AETEN_CLI_DEBUG="$(__aeten_cli_colorize '1;34m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_DEBUG}")")"
-AETEN_CLI_TRACE="$(__aeten_cli_colorize '1;34m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_TRACE}")")"
-AETEN_CLI_VERBOSE="$(__aeten_cli_colorize '1;37m' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_VERBOSE}")")"
-AETEN_CLI_OPEN_BRACKET=$(__aeten_cli_colorize '0;37m' "${AETEN_CLI_OPEN_BRACKET}")
-AETEN_CLI_CLOSE_BRACKET=$(__aeten_cli_colorize '0;37m' "${AETEN_CLI_CLOSE_BRACKET}")
-AETEN_CLI_TITLE_COLOR='1;37m'
-AETEN_CLI_SAVE_CURSOR_POSITION='\033[s'
-AETEN_CLI_RESTORE_CURSOR_POSITION='\033[u'
-AETEN_CLI_MOVE_CURSOR_UP='\033[1A'
-AETEN_CLI_MOVE_CURSOR_DOWN='\033[1B'
-AETEN_CLI_CLEAR_LINE='\033[2K'
-AETEN_CLI_CLEAR_UNTIL_EOL='\033[K'
+AETEN_CLI_INFORMATION="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_INFORMATION}")")"
+AETEN_CLI_QUERY="$(__aeten_cli_colorize 'bold\nsetaf 3' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_QUERY}")")"
+AETEN_CLI_ANSWERED="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_ANSWERED}")")"
+AETEN_CLI_WARNING="$(__aeten_cli_colorize 'bold\nsetaf 3' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_WARNING}")")"
+AETEN_CLI_SUCCESS="$(__aeten_cli_colorize 'bold\nsetaf 2' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_SUCCESS}")")"
+AETEN_CLI_FAILURE="$(__aeten_cli_colorize 'bold\nsetaf 1' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_FAILURE}")")"
+AETEN_CLI_DEBUG="$(__aeten_cli_colorize 'bold\nsetaf 4' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_DEBUG}")")"
+AETEN_CLI_TRACE="$(__aeten_cli_colorize 'bold\nsetaf 4' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_TRACE}")")"
+AETEN_CLI_VERBOSE="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_VERBOSE}")")"
+AETEN_CLI_PROGRESS="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_PROGRESS}")")"
+AETEN_CLI_OPEN_BRACKET=$(__aeten_cli_colorize 'setaf 7' "${AETEN_CLI_OPEN_BRACKET}")
+AETEN_CLI_CLOSE_BRACKET=$(__aeten_cli_colorize 'setaf 7' "${AETEN_CLI_CLOSE_BRACKET}")
+AETEN_CLI_TITLE_COLOR='bold\nsetaf 7'
+AETEN_CLI_SAVE_CURSOR_POSITION=$(tput sc)
+AETEN_CLI_RESTORE_CURSOR_POSITION=$(tput rc)
+AETEN_CLI_MOVE_CURSOR_UP=$(tput cuu1)
+AETEN_CLI_MOVE_CURSOR_DOWN=$(tput il 1)
+AETEN_CLI_CLEAR_LINE=$(tput el1)
+AETEN_CLI_CLEAR_UNTIL_EOL=$(tput el)
 
 __aeten_cli_ppid() {
 	awk '{print $4}' /proc/${1}/stat 2>/dev/null
@@ -162,7 +164,7 @@ aeten_cli_title() {
 	local mesage
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	message="${@}"
-	echo "${AETEN_CLI_TEXT_ALIGN}$(__aeten_cli_colorize ${AETEN_CLI_TITLE_COLOR} "${message}")" >${AETEN_CLI_OUTPUT}
+	echo "${AETEN_CLI_TEXT_ALIGN}$(__aeten_cli_colorize "${AETEN_CLI_TITLE_COLOR}" "${message}")" >${AETEN_CLI_OUTPUT}
 }
 
 aeten_cli_inform() {
@@ -258,20 +260,22 @@ __read_shadow() {
 	out=${1}
 	length=0
 	(
-		trap "stty $(stty -g)" EXIT INT QUIT
-		stty -echo
-		stty raw
+		[ -t 0 ] && {
+			trap "stty $(stty -g)" EXIT INT QUIT
+			stty -echo
+			stty raw
+		}
 		while true; do
 			char=$(dd bs=1 count=1 2>/dev/null)
 			numeric=$(printf "%d" "'${char}")
 			if [ ${numeric} -eq 3 ]; then
 				reply=
 				return 130
-			elif [ ${numeric} -eq 13 ]; then
+			elif [ ${numeric} -eq 13 ] || [ ${numeric} -eq 0 ]; then
 				break
 			elif [ ${numeric} -eq 127 ]; then
 				length=$(( $(__aeten_cli_string_length "${reply}") - 1 ))
-				[ ${length} -eq -1 ] && continue
+				[ ${length} -eq -1 ] && length=0 && continue
 				reply=$(echo ${reply}|awk '{ string=substr($0, 0, '${length}'); print string; }')
 				printf "\b${AETEN_CLI_CLEAR_UNTIL_EOL}" >${out}
 			else
@@ -284,14 +288,14 @@ __read_shadow() {
 		echo ${reply}
 	)
 	return_code=$?
-	echo >${out}
+	[ -t 0 ] && echo >${out}
 	return ${return_code}
 }
 
 aeten_cli_query() {
 	local out
 	local usage
-	local out
+	local opts
 	local script
 	local shadow
 	local return_code
@@ -316,7 +320,9 @@ aeten_cli_query() {
 	fi
 	return_code=$?
 	[ 0 -eq ${return_code} ] || return ${return_code}
-	__aeten_cli_tag -r $([ -t 0 ] && echo -u) "${AETEN_CLI_ANSWERED}" >${out}
+	[ -t 0 ] && opts="-u -n"
+	__aeten_cli_tag -r ${opts} "${AETEN_CLI_ANSWERED}" >${out}
+	printf "\r" >${out}
 	echo ${REPLY}
 }
 
@@ -416,7 +422,7 @@ aeten_cli_check() {
 		         	( eval "${@}" >&2 2>${AETEN_CLI_OUTPUT} )
 		         } || output=$(eval "${@}" 2>&1);;
 		quiet)   output=$(eval "${@}" 2>&1);;
-		*)       ${is_log_enable} && __aeten_cli_log -s -n -l "${AETEN_CLI_EMPTY_TAG}" "${message}"
+		*)       ${is_log_enable} && __aeten_cli_log -s -n -l "${AETEN_CLI_PROGRESS}" "${message}"
 		         output=$(eval "${@}" 2>&1);;
 	esac
 	[ 0 -eq ${?} ] && errno=0 || errno=${errno:-${?}}
