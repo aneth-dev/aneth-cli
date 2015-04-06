@@ -1,3 +1,5 @@
 *.mk
 *ninja*
-!template.*
+!template.ninja
+!ninja2make.sed
+makefile

@@ -1,35 +1,32 @@
 rule lib
-   command = @@check@@ -m "Install Æten CLI lib $out" cp $in $out
+   description = Install Æten CLI lib $out
+   command = mkdir -p $$(dirname $out) && cp $in $out
 
 rule symlink
-   command = @@check@@ -m "Install Æten CLI symlink $out" ln -s $in $out
+   description = Install Æten CLI symlink $out
+   command = mkdir -p $$(dirname $out) && ln -s $in $out
 
-rule uninstall
-   command = @@check@@ -m "Uninstall Æten CLI lib" '[ @@LIB_DIRNAME@@ = . ] || rm @@INSTALLED_CLI@@'; $
-            @@check@@ -m "Uninstall Æten CLI symlinks" rm @@LINKS@@; $
-            @@check@@ -m "Uninstall Æten CLI make include" rm -f @@LIB_DIR@@/@@CLI_MK@@
+rule uninstall_lib
+   description = Uninstall Æten CLI lib
+   command = rm @@LIB_DIR@@/@@CLI@@
+
+rule uninstall_symlinks
+   description = Uninstall Æten CLI symlinks
+   command = rm @@LINKS@@
 
 rule test
-   command = @@check@@ -m "Run Æten CLI tests" ./test.sh
+   description = Run Æten CLI tests
+   command = ./test.sh
 
-rule clean
-   command = @@check@@ -m "Delete Æten CLI make include" rm -f @@CLI_MK@@
-
-rule make_include
-   command = @@check@@ -m "Generate Æten CLI make include $out" '( . ./$in; __aeten_cli_api $in ) | awk '"'"'! /import/ {print $$0" = '$$(dirname $out)'/$in "$$0}'"'"' >$out'
-
-rule make_include_install
-   command = @@check@@ -m "Install Æten CLI make include $out" sed 's@$$(dirname $in|sed "s@.@\\\\.@g")@@@LIB_DIR@@@' $in '>' $out
-
-build install: phony || @@LINKS@@
-build uninstall: uninstall
-build @@LIB_DIR@@/@@CLI_MK@@: make_include_install @@CLI@@
-build @@CLI_MK@@: make_include @@CLI@@
-build clean: clean
 build test: test
 
+build install: phony || @@LINKS@@
+
+build uninstall: phony || uninstall_symlinks uninstall_lib
+build uninstall_symlinks: uninstall_symlinks
+build uninstall_lib: uninstall_lib
+
 build @@LIB_DIR@@/@@CLI@@: lib @@CLI@@
-
-default test @@CLI_MK@@
-
 @@LINK_BUILDS@@
+
+default test

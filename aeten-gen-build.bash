@@ -33,10 +33,19 @@ add-prefix() {
 target() {
 	local target
 	local depends
-	local usage="${0} [-d|--depends <depedency>] <targets-list>"
+	local cmd
+	local builder=ninja
+	local usage="${0} [-d|--depends <depedency>] [-b|--builder [ninja|make]] <targets-list>"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
+			-c|--command) cmd="${cmd} ${2}"; shift;;
 			-d|--depends) depends="${depends} ${2}"; shift;;
+			-b|--builder) builder="${2}"
+				case "${builder}" in
+					ninja|make);;
+					*) __usage "$1 ${usage}";;
+				esac
+ 				shift;;
 			-h|--help)    __help "$1 ${usage}"; shift ;;
 			--)           shift; break;;
 			-*)           __usage "$1 ${usage}";;
@@ -44,9 +53,16 @@ target() {
 		esac
 		shift
 	done
+	depends=$(echo ${depends}|sed 's/\(^\s\+\)|\(\s\+$\)//')
+	cmd=$(echo ${cmd}|sed 's/\(^\s\+\)|\(\s\+$\)//')
 	{
 		for target in "${@}"; do
-			echo "build ${target}: ${depends}"
+			case "${builder}" in
+				ninja)
+					echo "build ${target}: ${cmd} ${depends}";;
+				make)
+					echo "${target}: ${depends}\n\t\\\$(call ${cmd},${depends// /,},\\\$@)" ;;
+			esac
 		done
 	} | sed -e 's/$/\\/' -e '$s/\\$//'
 }
@@ -64,12 +80,14 @@ ${0} [$(__api|paste -sd\|)] --help"
 			-h|--help)    __help "${usage}"; shift ;;
 			*)            __usage "${usage}";;
 		esac
+		shift
 	done
-	for extension in ninja make; do
+	for extension in ninja mk make; do
 		[ $(basename ${template} .${extension}) = $(basename ${template}) ] || { builder=${extension}; break; }
 	done
 	case "${builder}" in
 		ninja);;
+		make|mk);;
 		*) __usage "Invalid builder ${builder}\n${usage}";;
 	esac
 	eval sed $(cat /dev/stdin |\
@@ -82,7 +100,7 @@ ${0} [$(__api|paste -sd\|)] --help"
 			N
 			$!ba
 			s/\n//g') ${template} |\
-		sed 's/\x00/\n/g' > $(dirname ${template})/build.${extension}
+		sed 's/\x00/\n/g'
 }
 
 if __is_api "${1}"; then
