@@ -371,7 +371,7 @@ ${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <
 	done
 
 	while true; do
-		reply=$(aeten_cli_query ${query_args} ${*} "${expected}")
+		reply=$(aeten_cli_query ${query_args} "${@}" $([ "${yes_pattern}" = "${AETEN_CLI_YES_PATTERN}" ] && echo "${expected}"))
 		echo "${reply}" | grep --extended-regexp "${yes_pattern}|${no_pattern}" 2>&1 1>/dev/null && break
 		if [ ${loop:-0} -eq 1 ]; then
 			printf "${AETEN_CLI_INVALID_REPLY_MESSAGE}\n" "${reply}" "[${yes_pattern}|${no_pattern}]" >${AETEN_CLI_OUTPUT}
@@ -434,13 +434,13 @@ aeten_cli_check() {
 		esac
 	elif ${is_log_enable}; then
 		case ${mode} in
-			verbose)${level} "${message}";;
-			quiet)  __aeten_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
-			        printf "%s\n%s" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
-			        aeten_cli_${level} "${message}";;
-			*)      __aeten_cli_tag verbose
-			        printf "%s\n%s" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
-			        aeten_cli_${level} "${message}";;
+			verbose) aeten_cli_${level} "${message}";;
+			quiet)   __aeten_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
+			         printf "%s\n%s\n" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
+			         aeten_cli_${level} "${message}";;
+			*)       __aeten_cli_tag verbose
+			         printf "%s\n%s\n" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
+			         aeten_cli_${level} "${message}";;
 		esac
 		[ 'fatal' = ${level} ] && exit ${errno}
 	fi
