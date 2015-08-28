@@ -11,8 +11,9 @@ done
 : ${prefix:=/usr/local}
 LIB_DIR="${prefix}/lib"
 BIN_DIR="${prefix}/bin"
+AETEN_MAKE=$(dirname ${0})/aeten-make
 CLI=aeten-cli.sh
-$(./${CLI} import check confirm)
+$($(dirname ${0})/${CLI} import check confirm)
 
 : ${builder:=$(./${CLI} confirm --no 'Use Ninja instead of GNU Make?' && echo ninja || echo make)}
 
@@ -23,17 +24,17 @@ case "${builder}" in
 	make)
 		template=template.mk
 		build_script=makefile
-		check -m 'Generates GNU Make template' "./ninja2make.sed template.ninja|sed 's,@@check@@,./${CLI} check,g' > template.mk";;
+		check -m 'Generates GNU Make template' "${AETEN_MAKE}/ninja2make template.ninja|sed 's,@@check@@,./${CLI} check,g' > template.mk";;
 esac
 
 check="./${CLI} check"
-addprefix='./aeten-gen-build.bash add-prefix'
-target="./aeten-gen-build.bash target --builder ${builder}"
+addprefix="${AETEN_MAKE}/generate-builder add-prefix"
+target="${AETEN_MAKE}/generate-builder target --builder ${builder}"
 
 COMMANDS=$(. ./${CLI} && __aeten_cli_api ${CLI} | grep -v '^import$')
 LINKS=$(${addprefix} ${BIN_DIR}/ ${COMMANDS})
 
-check -m "Generates ${build_script}" ./aeten-gen-build.bash -t ${template} "${@}" <<EOF '>' ${build_script}
+check -m "Generates ${build_script}" $(dirname ${0})/aeten-make/generate-builder -t ${template} "${@}" <<EOF '>' ${build_script}
 LIB_DIR = ${LIB_DIR}
 CLI = ${CLI}
 LINKS = ${LINKS}
