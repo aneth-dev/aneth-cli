@@ -30,3 +30,5 @@ build @@LIB_DIR@@/@@CLI@@: lib @@CLI@@
 @@LINK_BUILDS@@
 
 default test
+
+# vim: set expandtab shiftwidth=3 softtabstop=3 tabstop=4:
