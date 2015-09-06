@@ -1,0 +1,8 @@
+#!/bin/bash
+
+$(./aeten-bash-man init --prefix MY_ - -- "${@}" << EOF
+!arg-name|n <a-value>: This option may…
+EOF
+)
+echo MY_ARG_NAME=${MY_ARG_NAME}
+echo MY_HELP=${MY_HELP}
