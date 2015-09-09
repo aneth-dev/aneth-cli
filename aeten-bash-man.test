@@ -1,8 +1,15 @@
 #!/bin/bash
 
 $(./aeten-bash-man init --prefix MY_ - -- "${@}" << EOF
-!arg-name|n <a-value>: This option may…
+#NAME: $(basename ${0})
+#VERSION: 1.0
+#SHORT_DESCRIPTION: A bash man test
+#DESCRIPTION: *This* is the _loooooooong_ description of the _bash man_ test. This is the loooooooong description of the *bash man* test. This is the loooooooong description of the _bash man_ test.
+!foo-arg <a-value>: foo-arg _option_ description
+!bar: bar option description
+!baz|z <a-value>: baz option description
 EOF
 )
-echo MY_ARG_NAME=${MY_ARG_NAME}
-echo MY_HELP=${MY_HELP}
+echo MY_FOO_ARG=${MY_FOO_ARG}
+echo MY_BAR=${MY_BAR}
+echo MY_BAZ=${MY_BAZ}
