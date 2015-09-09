@@ -1,0 +1,180 @@
+#!/bin/bash
+
+# Depends:
+# bin: bash cat cut sed(GNU) grep man groff
+# debian: bash coreutils grep man-db groff-base
+
+# TODO:
+# $(aeten-bash-man init $@ << EOF
+# help: Print a help message.
+# hostname|n <host-name>: This option may…
+# […]
+# EOF
+# )
+#
+# output: eval $(cat - << EOF
+# HOSTNAME=<the-parsed-host-name>
+# […]
+# shift <n>
+#EOF
+#)
+
+__aeten_bm_debug_option() {
+	echo "$(${requiered} && echo '!')${name}|${short}$([ -z "${value}" ] || echo " <${value}>"): ${description}" >&2
+}
+
+__aeten_bm_parse_option() {
+	if [ help = "${name}" ]; then
+		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
+	elif [ -z "${value}" ]; then
+		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=true;;"
+	else
+		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=\${2}; shift;;"
+	echo;
+	fi
+}
+
+aeten_bm_init() {
+	local args=${@}
+	echo eval "$(cat - << EOF
+
+while [ \${#} -ne 0 ]; do
+		case "\${1}" in
+$(aeten_bm_foreach_option  __aeten_bm_parse_option ${args})
+		esac;
+		shift;
+	done
+
+EOF
+)"
+}
+
+aeten_bm_foreach_option() {
+	local lambda=${1}
+	shift
+	local input
+	local opt
+	local name
+	local short
+	local value
+	local description
+	local prefix
+	local options
+	local options_plus_help
+	local ifs_backup="${IFS}"
+	while [ ${#} -ne 0 ]; do
+		case "${1}" in
+			-p|--prefix) prefix="${2}"; shift;;
+			-)			  input="$(__aeten_bm_read_stdin)"; shift; break;;
+			--)			 shift;;
+			*)			  input="${@}"; break;;
+		esac
+		shift
+	done
+
+	IFS='
+'
+	options=$(echo "${input}"|sed '/^\s*#/d')
+	options_plus_help="help: Print a help message.
+${options}"
+	for opt in ${options_plus_help}; do
+		[ -z "${opt}" ] && continue
+		eval "$(printf -- "${opt}"|sed 's/\(\!\)\{0,1\}\([a-zA-Z0-9-]\{1,\}\)\(|\([a-zA-Z0-9]\)\)\{0,1\}\(\s<\([a-zA-Z0-9-]\{1,\}\)>\)\{0,1\}:\s*\(.*\)/name=\2; short=\4; requiered=\1; value=\6; description="\7"/')"
+		[ -z "${requiered}" ] && requiered=false || requiered=true
+		[ -z "${short}" ] && short=$(echo ${name}|cut -c 1)
+		eval "${lambda}"
+	done
+	IFS="${ifs_backup}"
+}
+
+aeten_bm_synopsys_usage() {
+	printf ' [-%s|--%s <%s>]' ${short} ${name} "${value}"
+}
+
+aeten_bm_synopsys_man() {
+	printf '.OP \-%s|--%s%s\n' ${short} ${name} "$([ -n "${value}" ] && echo " <${value}>")"
+}
+
+__aeten_bm_man_section() {
+	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_bm_man_inline_style)\""
+}
+
+aeten_bm_help() {
+	local input="$(__aeten_bm_read_stdin|sed 's/\\x0/\n/g')"
+	for section in name version short_description description; do
+		__aeten_bm_man_section ${section} "${input}"
+	done
+
+	cat - << EOF | man -l -
+.TH $(echo $name|tr '[:lower:]' '[:upper:]') 1 "$(date +%D)" "$name" "${version}" "$name Manual"
+.ie \n(.g .ds Aq \(aq
+.el		 .ds Aq '
+.nh
+.ad l
+.SH NAME
+.NH 1 ${name}
+.PP
+${name} - $(echo "${short_description}"|__aeten_bm_man_inline_style)
+.SH SYNOPSYS
+.
+.SY ${name}
+$(aeten_bm_foreach_option aeten_bm_synopsys_man "${input}")
+.fi
+.sp
+.SH DESCRIPTION
+$(echo "${description}"|__aeten_bm_man_inline_style)
+.sp
+.SH OPTIONS
+$(aeten_bm_foreach_option __aeten_bm_man_opt "${input}")
+EOF
+exit 0
+}
+
+aeten_bm_usage() {
+	local script=${1}
+	shift
+	local errno=${1}
+	shift
+	groff -T utf8 -man << EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' >/dev/fd/$([ ${errno} -eq 0 ] && echo 1 || echo 2)
+.TH
+.SH Usage:
+.SY $(basename ${script})
+$(aeten_bm_synopsys_man)
+EOF
+	exit ${errno}
+}
+
+__aeten_bm_man_inline_style() {
+	sed --regexp-extended 's/_([ A-Za-z0-9\(\)<>\+-]+)_ ?/\n.I \1\n/g;s/\*([ A-Za-z0-9\(\)<>\+-]+)\* ?/\n.B \1\n/g'
+}
+
+__aeten_bm_man_opt() {
+	cat - << EOF
+.TP
+.B \\-${short}
+.TQ
+.BI \\-\\-${name}\\  ${value}
+$(echo "${description}"|__aeten_bm_man_inline_style)
+EOF
+}
+
+__aeten_bm_api() {
+	sed --quiet --regexp-extended 's/^aeten_bm_([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
+}
+
+__aeten_bm_is_api() {
+	test 1 -eq $(__aeten_bm_api "${1}"|grep -F "${2}"|wc -l) 2>/dev/null
+}
+
+__aeten_bm_read_stdin() {
+	cat /dev/stdin
+}
+
+aeten_bm_cmd=${1}
+shift
+if [ import = "${aeten_bm_cmd}" ]; then
+	echo eval ". ${0} && aeten_bm_${aeten_bm_cmd} ${0} '${@}'"
+else
+	__aeten_bm_is_api ${0} ${aeten_bm_cmd} && aeten_bm_${aeten_bm_cmd} "${@}" || exit 1
+fi
+

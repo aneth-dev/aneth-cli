@@ -14,11 +14,17 @@ rule uninstall_symlinks
    description = Uninstall Æten CLI symlinks
    command = rm @@LINKS@@
 
-rule test
-   description = Run Æten CLI tests
-   command = ./test.sh
+rule aeten-ads-test
+   description = Run Æten ADS tests
+   command = test/aeten-ads.test -f foo -b -z baz && test/aeten-ads.test -h
 
-build test: test
+rule aeten-cli-test
+   description = Run Æten CLI tests
+   command = test/aeten-cli.test
+
+build test: phony || aeten-cli-test aeten-ads-test
+build aeten-cli-test: aeten-cli-test
+build aeten-ads-test: aeten-ads-test
 
 build install: phony || @@LINKS@@
 
@@ -31,4 +37,4 @@ build @@LIB_DIR@@/@@CLI@@: lib @@CLI@@
 
 default test
 
-# vim: set expandtab shiftwidth=3 softtabstop=3 tabstop=4:
+# vim: set expandtab shiftwidth=3 softtabstop=3 tabstop=4 filetype=ninja:
