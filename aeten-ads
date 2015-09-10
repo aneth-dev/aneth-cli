@@ -13,8 +13,8 @@ aeten_ads_init() {
 
 while [ \${#} -ne 0 ]; do
 	case "\${1}" in
-$(aeten_ads_foreach_option  __aeten_ads_parse_option ${args}|__aeten_ads_indent 2 $'\t')
-		-*) $(readlink -f ${0}) usage ${name} 1 <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 1;;
+		$(aeten_ads_foreach_option  __aeten_ads_parse_option ${args})
+		$(__aeten_ads_wrong_option)
 	esac;
 	shift;
 done
@@ -113,12 +113,12 @@ EOF
 	exit ${errno}
 }
 
-__aeten_ads_man_section() {
-	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_ads_man_inline_style)\""
+__aeten_ads_wrong_option() {
+		echo "-*) $(readlink -f ${0}) usage ${name} 1 <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 1;;"
 }
 
-__aeten_ads_indent() {
-	sed "s/^/$(printf "%${1}s" ${2})/"
+__aeten_ads_man_section() {
+	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_ads_man_inline_style)\""
 }
 
 __aeten_ads_debug_option() {
@@ -159,10 +159,12 @@ __aeten_ads_is_api() {
 }
 
 aeten_ads_cmd=${1}
-shift
-if [ import = "${aeten_ads_cmd}" ]; then
-	echo eval ". ${0} && aeten_ads_${aeten_ads_cmd} ${0} '${@}'"
-else
-	__aeten_ads_is_api ${0} ${aeten_ads_cmd} && aeten_ads_${aeten_ads_cmd} "${@}" || exit 1
+if __aeten_ads_is_api ${0} ${aeten_ads_cmd}; then
+   shift
+   aeten_ads_${aeten_ads_cmd} "${@}"
+   exit $?
+# Allows script content inclusion
+elif [ "$(basename $(readlink -f ${0}))" = 'aeten-ads' ]; then
+   exit 1
 fi
 
