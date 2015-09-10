@@ -4,46 +4,20 @@
 # bin: bash cat cut sed(GNU) grep man groff
 # debian: bash coreutils grep man-db groff-base
 
-# TODO:
-# $(aeten-bash-man init $@ << EOF
-# help: Print a help message.
-# hostname|n <host-name>: This option may…
-# […]
-# EOF
-# )
-#
-# output: eval $(cat - << EOF
-# HOSTNAME=<the-parsed-host-name>
-# […]
-# shift <n>
-#EOF
-#)
-
-__aeten_bm_debug_option() {
-	echo "$(${requiered} && echo '!')${name}|${short}$([ -z "${value}" ] || echo " <${value}>"): ${description}" >&2
-}
-
-__aeten_bm_parse_option() {
-	if [ help = "${name}" ]; then
-		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
-	elif [ -z "${value}" ]; then
-		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=true;;"
-	else
-		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=\${2}; shift;;"
-	echo;
-	fi
-}
-
 aeten_bm_init() {
 	local args=${@}
+	local input="$(cat /dev/stdin|sed 's/$/\x0/g')"
+	__aeten_bm_man_section name "${input}"
+
 	echo eval "$(cat - << EOF
 
 while [ \${#} -ne 0 ]; do
-		case "\${1}" in
-$(aeten_bm_foreach_option  __aeten_bm_parse_option ${args})
-		esac;
-		shift;
-	done
+	case "\${1}" in
+$(aeten_bm_foreach_option  __aeten_bm_parse_option ${args}|__aeten_bm_indent 2 $'\t')
+		-*) $(readlink -f ${0}) usage ${name} 1 <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 1;;
+	esac;
+	shift;
+done
 
 EOF
 )"
@@ -52,7 +26,6 @@ EOF
 aeten_bm_foreach_option() {
 	local lambda=${1}
 	shift
-	local input
 	local opt
 	local name
 	local short
@@ -65,9 +38,7 @@ aeten_bm_foreach_option() {
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
 			-p|--prefix) prefix="${2}"; shift;;
-			-)			  input="$(__aeten_bm_read_stdin)"; shift; break;;
 			--)			 shift;;
-			*)			  input="${@}"; break;;
 		esac
 		shift
 	done
@@ -95,18 +66,18 @@ aeten_bm_synopsys_man() {
 	printf '.OP \-%s|--%s%s\n' ${short} ${name} "$([ -n "${value}" ] && echo " <${value}>")"
 }
 
-__aeten_bm_man_section() {
-	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_bm_man_inline_style)\""
+aeten_bm_help() {
+	aeten_bm_groff|man -l -
 }
 
-aeten_bm_help() {
-	local input="$(__aeten_bm_read_stdin|sed 's/\\x0/\n/g')"
+aeten_bm_groff() {
+	local input="$(cat /dev/stdin|sed 's/\\x0/\n/g')"
 	for section in name version short_description description; do
 		__aeten_bm_man_section ${section} "${input}"
 	done
 
-	cat - << EOF | man -l -
-.TH $(echo $name|tr '[:lower:]' '[:upper:]') 1 "$(date +%D)" "$name" "${version}" "$name Manual"
+	cat - << EOF
+.TH $(echo $name|tr '[:lower:]' '[:upper:]') 1 "$(date +%D)" "$name ${version}" "$name Manual"
 .ie \n(.g .ds Aq \(aq
 .el		 .ds Aq '
 .nh
@@ -118,19 +89,19 @@ ${name} - $(echo "${short_description}"|__aeten_bm_man_inline_style)
 .SH SYNOPSYS
 .
 .SY ${name}
-$(aeten_bm_foreach_option aeten_bm_synopsys_man "${input}")
+$(aeten_bm_foreach_option aeten_bm_synopsys_man)
 .fi
 .sp
 .SH DESCRIPTION
 $(echo "${description}"|__aeten_bm_man_inline_style)
 .sp
 .SH OPTIONS
-$(aeten_bm_foreach_option __aeten_bm_man_opt "${input}")
+$(aeten_bm_foreach_option __aeten_bm_man_opt)
 EOF
-exit 0
 }
 
 aeten_bm_usage() {
+	local input="$(cat /dev/stdin|sed 's/\\x0/\n/g')"
 	local script=${1}
 	shift
 	local errno=${1}
@@ -139,9 +110,34 @@ aeten_bm_usage() {
 .TH
 .SH Usage:
 .SY $(basename ${script})
-$(aeten_bm_synopsys_man)
+$(aeten_bm_foreach_option aeten_bm_synopsys_man)
 EOF
 	exit ${errno}
+}
+
+
+
+__aeten_bm_man_section() {
+	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_bm_man_inline_style)\""
+}
+
+__aeten_bm_indent() {
+	sed "s/^/$(printf "%${1}s" ${2})/"
+}
+
+__aeten_bm_debug_option() {
+	echo "$(${requiered} && echo '!')${name}|${short}$([ -z "${value}" ] || echo " <${value}>"): ${description}" >&2
+}
+
+__aeten_bm_parse_option() {
+	if [ help = "${name}" ]; then
+		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
+	elif [ -z "${value}" ]; then
+		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=true;;"
+	else
+		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=\${2}; shift;;"
+	echo;
+	fi
 }
 
 __aeten_bm_man_inline_style() {
@@ -163,11 +159,7 @@ __aeten_bm_api() {
 }
 
 __aeten_bm_is_api() {
-	test 1 -eq $(__aeten_bm_api "${1}"|grep -F "${2}"|wc -l) 2>/dev/null
-}
-
-__aeten_bm_read_stdin() {
-	cat /dev/stdin
+	test 1 -eq $(__aeten_bm_api "${1}"|grep "^${2}$"|wc -l) 2>/dev/null
 }
 
 aeten_bm_cmd=${1}
