@@ -24,8 +24,7 @@ EOF
 }
 
 aeten_ads_foreach_option() {
-	local lambda=${1}
-	shift
+	local lambda=${1}; shift
 	local opt
 	local name
 	local short
@@ -38,7 +37,6 @@ aeten_ads_foreach_option() {
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
 			-p|--prefix) prefix="${2}"; shift;;
-			--)			 shift;;
 		esac
 		shift
 	done
@@ -72,12 +70,12 @@ aeten_ads_help() {
 
 aeten_ads_groff() {
 	local input="$(cat /dev/stdin|sed 's/\\x0/\n/g')"
-	for section in name version short_description description; do
+	for section in name version title short_description description; do
 		__aeten_ads_man_section ${section} "${input}"
 	done
 
 	cat - << EOF
-.TH $(echo $name|tr '[:lower:]' '[:upper:]') 1 "$(date +%D)" "$name ${version}" "$name Manual"
+.TH $(echo $name|tr '[:lower:]' '[:upper:]') 1 "$(date +%D)" "$name ${version}" "${title}"
 .ie \n(.g .ds Aq \(aq
 .el		 .ds Aq '
 .nh
@@ -114,8 +112,6 @@ $(aeten_ads_foreach_option aeten_ads_synopsys_man)
 EOF
 	exit ${errno}
 }
-
-
 
 __aeten_ads_man_section() {
 	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_ads_man_inline_style)\""
