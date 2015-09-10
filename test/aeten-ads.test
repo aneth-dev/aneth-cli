@@ -3,8 +3,8 @@
 $(./aeten-ads init --prefix MY_ - -- "${@}" << EOF
 #NAME: $(basename ${0})
 #VERSION: 1.0
-#SHORT_DESCRIPTION: An ADS man test
-#DESCRIPTION: *This* is the _loooooooong_ description of the _bash man_ test. This is the loooooooong description of the *bash man* test. This is the loooooooong description of the _bash man_ test.
+#SHORT_DESCRIPTION: An auto-documented script (ADS) test
+#DESCRIPTION: *This* is the _loooooooong_ description of the _auto-documented script_ test. This is the loooooooong description of the *auto-documented script* test. This is the loooooooong description of the _auto-documented script_ test.
 !foo-arg <a-value>: foo-arg _option_ description
 !bar: bar option description
 !baz|z <a-value>: baz option description

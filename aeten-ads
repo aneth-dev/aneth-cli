@@ -4,16 +4,16 @@
 # bin: bash cat cut sed(GNU) grep man groff
 # debian: bash coreutils grep man-db groff-base
 
-aeten_bm_init() {
+aeten_ads_init() {
 	local args=${@}
 	local input="$(cat /dev/stdin|sed 's/$/\x0/g')"
-	__aeten_bm_man_section name "${input}"
+	__aeten_ads_man_section name "${input}"
 
 	echo eval "$(cat - << EOF
 
 while [ \${#} -ne 0 ]; do
 	case "\${1}" in
-$(aeten_bm_foreach_option  __aeten_bm_parse_option ${args}|__aeten_bm_indent 2 $'\t')
+$(aeten_ads_foreach_option  __aeten_ads_parse_option ${args}|__aeten_ads_indent 2 $'\t')
 		-*) $(readlink -f ${0}) usage ${name} 1 <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 1;;
 	esac;
 	shift;
@@ -23,7 +23,7 @@ EOF
 )"
 }
 
-aeten_bm_foreach_option() {
+aeten_ads_foreach_option() {
 	local lambda=${1}
 	shift
 	local opt
@@ -58,22 +58,22 @@ ${options}"
 	IFS="${ifs_backup}"
 }
 
-aeten_bm_synopsys_usage() {
+aeten_ads_synopsys_usage() {
 	printf ' [-%s|--%s <%s>]' ${short} ${name} "${value}"
 }
 
-aeten_bm_synopsys_man() {
+aeten_ads_synopsys_man() {
 	printf '.OP \-%s|--%s%s\n' ${short} ${name} "$([ -n "${value}" ] && echo " <${value}>")"
 }
 
-aeten_bm_help() {
-	aeten_bm_groff|man -l -
+aeten_ads_help() {
+	aeten_ads_groff|man -l -
 }
 
-aeten_bm_groff() {
+aeten_ads_groff() {
 	local input="$(cat /dev/stdin|sed 's/\\x0/\n/g')"
 	for section in name version short_description description; do
-		__aeten_bm_man_section ${section} "${input}"
+		__aeten_ads_man_section ${section} "${input}"
 	done
 
 	cat - << EOF
@@ -85,22 +85,22 @@ aeten_bm_groff() {
 .SH NAME
 .NH 1 ${name}
 .PP
-${name} - $(echo "${short_description}"|__aeten_bm_man_inline_style)
+${name} - $(echo "${short_description}"|__aeten_ads_man_inline_style)
 .SH SYNOPSYS
 .
 .SY ${name}
-$(aeten_bm_foreach_option aeten_bm_synopsys_man)
+$(aeten_ads_foreach_option aeten_ads_synopsys_man)
 .fi
 .sp
 .SH DESCRIPTION
-$(echo "${description}"|__aeten_bm_man_inline_style)
+$(echo "${description}"|__aeten_ads_man_inline_style)
 .sp
 .SH OPTIONS
-$(aeten_bm_foreach_option __aeten_bm_man_opt)
+$(aeten_ads_foreach_option __aeten_ads_man_opt)
 EOF
 }
 
-aeten_bm_usage() {
+aeten_ads_usage() {
 	local input="$(cat /dev/stdin|sed 's/\\x0/\n/g')"
 	local script=${1}
 	shift
@@ -110,26 +110,26 @@ aeten_bm_usage() {
 .TH
 .SH Usage:
 .SY $(basename ${script})
-$(aeten_bm_foreach_option aeten_bm_synopsys_man)
+$(aeten_ads_foreach_option aeten_ads_synopsys_man)
 EOF
 	exit ${errno}
 }
 
 
 
-__aeten_bm_man_section() {
-	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_bm_man_inline_style)\""
+__aeten_ads_man_section() {
+	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_ads_man_inline_style)\""
 }
 
-__aeten_bm_indent() {
+__aeten_ads_indent() {
 	sed "s/^/$(printf "%${1}s" ${2})/"
 }
 
-__aeten_bm_debug_option() {
+__aeten_ads_debug_option() {
 	echo "$(${requiered} && echo '!')${name}|${short}$([ -z "${value}" ] || echo " <${value}>"): ${description}" >&2
 }
 
-__aeten_bm_parse_option() {
+__aeten_ads_parse_option() {
 	if [ help = "${name}" ]; then
 		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
 	elif [ -z "${value}" ]; then
@@ -140,33 +140,33 @@ __aeten_bm_parse_option() {
 	fi
 }
 
-__aeten_bm_man_inline_style() {
+__aeten_ads_man_inline_style() {
 	sed --regexp-extended 's/_([ A-Za-z0-9\(\)<>\+-]+)_ ?/\n.I \1\n/g;s/\*([ A-Za-z0-9\(\)<>\+-]+)\* ?/\n.B \1\n/g'
 }
 
-__aeten_bm_man_opt() {
+__aeten_ads_man_opt() {
 	cat - << EOF
 .TP
 .B \\-${short}
 .TQ
 .BI \\-\\-${name}\\  ${value}
-$(echo "${description}"|__aeten_bm_man_inline_style)
+$(echo "${description}"|__aeten_ads_man_inline_style)
 EOF
 }
 
-__aeten_bm_api() {
-	sed --quiet --regexp-extended 's/^aeten_bm_([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
+__aeten_ads_api() {
+	sed --quiet --regexp-extended 's/^aeten_ads_([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
 }
 
-__aeten_bm_is_api() {
-	test 1 -eq $(__aeten_bm_api "${1}"|grep "^${2}$"|wc -l) 2>/dev/null
+__aeten_ads_is_api() {
+	test 1 -eq $(__aeten_ads_api "${1}"|grep "^${2}$"|wc -l) 2>/dev/null
 }
 
-aeten_bm_cmd=${1}
+aeten_ads_cmd=${1}
 shift
-if [ import = "${aeten_bm_cmd}" ]; then
-	echo eval ". ${0} && aeten_bm_${aeten_bm_cmd} ${0} '${@}'"
+if [ import = "${aeten_ads_cmd}" ]; then
+	echo eval ". ${0} && aeten_ads_${aeten_ads_cmd} ${0} '${@}'"
 else
-	__aeten_bm_is_api ${0} ${aeten_bm_cmd} && aeten_bm_${aeten_bm_cmd} "${@}" || exit 1
+	__aeten_ads_is_api ${0} ${aeten_ads_cmd} && aeten_ads_${aeten_ads_cmd} "${@}" || exit 1
 fi
 
