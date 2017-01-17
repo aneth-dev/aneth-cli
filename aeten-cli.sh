@@ -2,7 +2,9 @@
 
 __aeten_cli_colorize() {
 	local color="${1}"; shift
-	echo "$(test $(tput colors 2>/dev/null) -ge 8 && printf "$(printf "${color}"|tput -S)${@}$(tput sgr0)" || echo "${@}")"
+	local tput_color=$(tput colors 2>/dev/null)
+	test -z "${tput_color}" && tput_color=0
+	echo "$(test ${tput_color} -ge 8 && printf "$(printf "${color}"|tput -S)${@}$(tput sgr0)" || echo "${@}")"
 }
 
 AETEN_CLI_LEVEL_FATAL=0
