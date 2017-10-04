@@ -6,7 +6,7 @@
 
 aeten_ads_init() {
 	local args=${@}
-	local input="$(cat /dev/stdin|sed 's/$/\x0/g')"
+	local input="$(cat -)"
 	__aeten_ads_man_section name "${input}"
 
 	echo eval "$(cat - << EOF
@@ -104,7 +104,7 @@ aeten_ads_usage() {
 	shift
 	local errno=${1}
 	shift
-	groff -T utf8 -man << EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' >/dev/fd/$([ ${errno} -eq 0 ] && echo 1 || echo 2)
+	groff -T utf8 -man << EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' >/dev/fd/$([ "${errno}" -eq 0 ] && echo 1 || echo 2)
 .TH
 .SH Usage:
 .SY $(basename ${script})
