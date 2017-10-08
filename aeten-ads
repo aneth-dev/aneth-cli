@@ -137,7 +137,7 @@ __aeten_ads_parse_option() {
 }
 
 __aeten_ads_man_inline_style() {
-	sed --regexp-extended 's/_([:\\\/ A-Za-z0-9\(\)<>\+-]+)_ ?/\n.I \1\n/g;s/\*([:\\\/ A-Za-z0-9:\(\)<>\+-]+)\* ?/\n.B \1\n/g'
+	sed --regexp-extended 's/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\\])_([^_]+)_ ?/\n.I \1\2\n/g;s/([^\\])\*([^*]+)\* ?/\n.B \1\2\n/g ; s/\\\[u0042\]/*/g;'
 }
 
 __aeten_ads_man_opt() {
