@@ -126,12 +126,13 @@ __aeten_ads_debug_option() {
 }
 
 __aeten_ads_parse_option() {
+	local _varname=${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)
 	if [ help = "${name}" ]; then
 		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
 	elif [ -z "${value}" ]; then
-		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=true;;"
+		echo "-${short}|--${name}) ${_varname}=true;;"
 	else
-		echo "-${short}|--${name}) ${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)=\${2}; shift;;"
+		echo "-${short}|--${name}) [ -z "\$${_varname}" ] && ${_varname}=\${2} || ${_varname}+=\ \${2} ; shift;;"
 	echo;
 	fi
 }
