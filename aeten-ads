@@ -30,13 +30,13 @@ aeten_ads_foreach_option() {
 	local short
 	local value
 	local description
-	local prefix
+	local _var_prefix
 	local options
 	local options_plus_help
 	local ifs_backup="${IFS}"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
-			-p|--prefix) prefix="${2}"; shift;;
+			prefix) _var_prefix="${2}"; shift;;
 		esac
 		shift
 	done
@@ -126,7 +126,7 @@ __aeten_ads_debug_option() {
 }
 
 __aeten_ads_parse_option() {
-	local _varname=${prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)
+	local _varname=${_var_prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)
 	if [ help = "${name}" ]; then
 		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
 	elif [ -z "${value}" ]; then
