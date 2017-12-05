@@ -13,6 +13,7 @@ LIB_DIR="${prefix}/lib"
 BIN_DIR="${prefix}/bin"
 AETEN_MAKE=$(dirname ${0})/aeten-make
 CLI=aeten-cli.sh
+ADS=aeten-ads
 $($(dirname ${0})/${CLI} import check confirm)
 
 : ${builder:=$(./${CLI} confirm --no 'Use Ninja instead of GNU Make?' && echo ninja || echo make)}
@@ -37,8 +38,9 @@ LINKS=$(${addprefix} ${BIN_DIR}/ ${COMMANDS})
 check -m "Generates ${build_script}" $(dirname ${0})/aeten-make/generate-builder -t ${template} "${@}" <<EOF '>' ${build_script}
 LIB_DIR = ${LIB_DIR}
 CLI = ${CLI}
-LINKS = ${LINKS}
-LINK_BUILDS = $(${target} --command symlink --depends "${LIB_DIR}/${CLI}" ${LINKS})
+ADS = ${ADS}
+LINKS = ${BIN_DIR}/ads ${LINKS}
+LINK_BUILDS = $(${target} --command symlink --depends "${LIB_DIR}/${ADS}" ${BIN_DIR}/ads)\\\n$(${target} --command symlink --depends "${LIB_DIR}/${CLI}" ${LINKS})
 EOF
 
 [ ${builder} = make ] && rm template.mk
