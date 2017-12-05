@@ -6,7 +6,7 @@
 
 aeten_ads_init() {
 	local args=${@}
-	local input="$(cat -)"
+	local input=$(sed 's/'"'"'/\\[u0027]/g; s/`/\\[u0060]/g; s/\$/\\[u0024]/g' /dev/stdin)
 	__aeten_ads_man_section name "${input}"
 
 	echo eval "$(cat - << EOF
@@ -14,6 +14,7 @@ aeten_ads_init() {
 while [ \${#} -ne 0 ]; do
 	case "\${1}" in
 		$(aeten_ads_foreach_option  __aeten_ads_parse_option ${args})
+		--) shift; break;;
 		$(__aeten_ads_wrong_option)
 	esac;
 	shift;
@@ -69,7 +70,7 @@ aeten_ads_help() {
 }
 
 aeten_ads_groff() {
-	local input="$(cat /dev/stdin|sed 's/\\x0/\n/g')"
+	local input="$(sed 's/\\x0/\n/g' /dev/stdin)"
 	for section in name version title short_description description; do
 		__aeten_ads_man_section ${section} "${input}"
 	done
@@ -99,12 +100,12 @@ EOF
 }
 
 aeten_ads_usage() {
-	local input="$(cat /dev/stdin|sed 's/\\x0/\n/g')"
+	local input="$(sed 's/\\x0/\n/g' /dev/stdin)"
 	local script=${1}
 	shift
 	local errno=${1}
 	shift
-	groff -T utf8 -man << EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' >/dev/fd/$([ "${errno}" -eq 0 ] && echo 1 || echo 2)
+	groff -T utf8 -man << EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' >/dev/fd/$([ ${errno} -eq 0 ] && echo 1 || echo 2)
 .TH
 .SH Usage:
 .SY $(basename ${script})
@@ -130,7 +131,7 @@ __aeten_ads_parse_option() {
 	if [ help = "${name}" ]; then
 		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
 	elif [ -z "${value}" ]; then
-		echo "-${short}|--${name}) ${_varname}=true;;"
+		echo "-${short}|--${name}) ${_varname}=true; shift;;"
 	else
 		echo "-${short}|--${name}) [ -z "\$${_varname}" ] && ${_varname}=\${2} || ${_varname}+=\ \${2} ; shift;;"
 	echo;
@@ -138,7 +139,7 @@ __aeten_ads_parse_option() {
 }
 
 __aeten_ads_man_inline_style() {
-	sed --regexp-extended 's/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\\])_([^_]+)_ ?/\n.I \1\2\n/g;s/([^\\])\*([^*]+)\* ?/\n.B \1\2\n/g ; s/\\\[u0042\]/*/g;'
+	sed --regexp-extended 's/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\\])?_([^_]+)_ ?/\n.I \1\2\n/g;s/([^\\])?\*([^*]+)\* ?/\n.B \1\2\n/g ; s/\\\[u0042\]/*/g;'
 }
 
 __aeten_ads_man_opt() {
@@ -165,7 +166,7 @@ if __aeten_ads_is_api ${0} ${aeten_ads_cmd}; then
    aeten_ads_${aeten_ads_cmd} "${@}"
    exit $?
 # Allows script content inclusion
-elif [ "$(basename $(readlink -f ${0}))" = 'aeten-ads' ]; then
+elif [ "$(basename $(readlink -f ${0}))" != 'ads' ]; then
    exit 1
 fi
 
