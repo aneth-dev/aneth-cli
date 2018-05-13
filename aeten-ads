@@ -6,7 +6,7 @@
 
 aeten_ads_init() {
 	local args=${@}
-	local input=$(sed 's/'"'"'/\\[u0027]/g; s/`/\\[u0060]/g; s/\$/\\[u0024]/g' /dev/stdin)
+	local input=$(sed 's/'"'"'/\\[u0027]/g; s/`/\\[u0060]/g; s/\$/\\[u0024]/g; s/  / \\ /g' /dev/stdin)
 	__aeten_ads_man_section name "${input}"
 
 	echo eval "$(cat - << EOF
@@ -19,6 +19,8 @@ while [ \${#} -ne 0 ]; do
 	esac;
 	shift;
 done
+;
+$(aeten_ads_foreach_option  __aeten_ads_check_option ${args})
 
 EOF
 )"
@@ -27,7 +29,7 @@ EOF
 aeten_ads_foreach_option() {
 	local lambda=${1}; shift
 	local opt
-	local name
+	local option
 	local short
 	local value
 	local description
@@ -42,27 +44,34 @@ aeten_ads_foreach_option() {
 		shift
 	done
 
-	IFS='
-'
+	IFS=$'\n'
 	options=$(echo "${input}"|sed '/^\s*#/d')
-	options_plus_help="help: Print a help message.
+	options_plus_help="help: Print this help.
 ${options}"
 	for opt in ${options_plus_help}; do
 		[ -z "${opt}" ] && continue
-		eval "$(printf -- "${opt}"|sed 's/\(\!\)\{0,1\}\([a-zA-Z0-9-]\{1,\}\)\(|\([a-zA-Z0-9]\)\)\{0,1\}\(\s<\([a-zA-Z0-9-]\{1,\}\)>\)\{0,1\}:\s*\(.*\)/name=\2; short=\4; requiered=\1; value=\6; description="\7"/')"
+		eval "$(cat - <<< "${opt}"|sed 's/\(\!\)\{0,1\}\([a-zA-Z0-9-]\{1,\}\)\(|\([a-zA-Z0-9]\)\)\{0,1\}\(\s\([<>a-zA-Z0-9-]\{1,\}\)\)\{0,1\}:\s*\(.*\)/option=\2; short=\4; requiered=\1; value="\6"; description="\7"/')"
 		[ -z "${requiered}" ] && requiered=false || requiered=true
-		[ -z "${short}" ] && short=$(echo ${name}|cut -c 1)
+		[ -z "${short}" ] && short=$(echo ${option}|cut -c 1)
 		eval "${lambda}"
 	done
 	IFS="${ifs_backup}"
 }
 
 aeten_ads_synopsys_usage() {
-	printf ' [-%s|--%s <%s>]' ${short} ${name} "${value}"
+	if ${requiered}; then
+		printf ' -%s|--%s %s' ${short} ${option} "${value}"
+	else
+		printf ' [-%s|--%s %s]' ${short} ${option} "${value}"
+	fi
 }
 
 aeten_ads_synopsys_man() {
-	printf '.OP \-%s|--%s%s\n' ${short} ${name} "$([ -n "${value}" ] && echo " <${value}>")"
+	if ${requiered}; then
+		printf '.B -%s|--%s\n%s\n' ${short} ${option} "$([ -n "${value}" ] && echo ".I ${value}")"
+	else
+		printf '.OP \-%s|--%s%s\n' ${short} ${option} "$([ -n "${value}" ] && echo " ${value}")"
+	fi
 }
 
 aeten_ads_help() {
@@ -78,7 +87,7 @@ aeten_ads_groff() {
 	cat - << EOF
 .TH $(echo $name|tr '[:lower:]' '[:upper:]') 1 "$(date +%D)" "$name ${version}" "${title}"
 .ie \n(.g .ds Aq \(aq
-.el		 .ds Aq '
+.el       .ds Aq '
 .nh
 .ad l
 .SH NAME
@@ -119,35 +128,45 @@ __aeten_ads_wrong_option() {
 }
 
 __aeten_ads_man_section() {
-	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo ${1}|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_ads_man_inline_style)\""
+	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo "${1}"|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_ads_man_inline_style)\""
 }
 
 __aeten_ads_debug_option() {
-	echo "$(${requiered} && echo '!')${name}|${short}$([ -z "${value}" ] || echo " <${value}>"): ${description}" >&2
+	echo "$(${requiered} && echo '!')${option}|${short}$([ -z "${value}" ] || echo " ${value}"): ${description}" >&2
+}
+
+__aeten_ads_check_option() {
+	local _varname
+	if ${requiered}; then
+		_varname=${_var_prefix}$(echo ${option}|tr '[:lower:]' '[:upper:]'|tr - _)
+		echo "[ -z \${${_varname}+x} ] && { $(readlink -f ${0}) usage ${name} 1 <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 1; };"
+	fi
 }
 
 __aeten_ads_parse_option() {
-	local _varname=${_var_prefix}$(echo ${name}|tr '[:lower:]' '[:upper:]'|tr - _)
-	if [ help = "${name}" ]; then
-		echo "-${short}|--${name}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
+	local _varname=${_var_prefix}$(echo ${option}|tr '[:lower:]' '[:upper:]'|tr - _)
+	if [ help = "${option}" ]; then
+		echo "-${short}|--${option}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
 	elif [ -z "${value}" ]; then
-		echo "-${short}|--${name}) ${_varname}=true; shift;;"
+		echo "-${short}|--${option}) ${_varname}=true; shift;;"
 	else
-		echo "-${short}|--${name}) [ -z "\$${_varname}" ] && ${_varname}=\${2} || ${_varname}+=\ \${2} ; shift;;"
+		echo "-${short}|--${option}) [ -z "\$${_varname}" ] && ${_varname}=\${2} || ${_varname}+=\ \${2} ; shift;;"
 	echo;
 	fi
 }
 
 __aeten_ads_man_inline_style() {
-	sed --regexp-extended 's/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\\])?_([^_]+)_ ?/\n.I \1\2\n/g;s/([^\\])?\*([^*]+)\* ?/\n.B \1\2\n/g ; s/\\\[u0042\]/*/g;'
+	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\\])?_([^_]+)_( )?/\1\\fI\2\\fR\3/g;s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
 }
 
 __aeten_ads_man_opt() {
+	local formated_value
+	if [ -n "${value}" ]; then
+		formated_value="\\ \\fI${value}"
+	fi
 	cat - << EOF
 .TP
-.B \\-${short}
-.TQ
-.BI \\-\\-${name}\\  ${value}
+.B \\-${short}${formated_value}\\fR, \\fB\\-\\-${option}${formated_value}
 $(echo "${description}"|__aeten_ads_man_inline_style)
 EOF
 }
