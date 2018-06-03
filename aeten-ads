@@ -3,10 +3,10 @@
 # Depends:
 # bin: bash cat cut sed(GNU) grep man groff
 # debian: bash coreutils grep man-db groff-base
+input=$(sed 's/'"'"'/\\[u0027]/g; s/`/\\[u0060]/g; s/\$/\\[u0024]/g; s/  / \\ /g' /dev/stdin)
 
 aeten_ads_init() {
 	local args=${@}
-	local input=$(sed 's/'"'"'/\\[u0027]/g; s/`/\\[u0060]/g; s/\$/\\[u0024]/g; s/  / \\ /g' /dev/stdin)
 	__aeten_ads_man_section name "${input}"
 
 	echo eval "$(cat - << EOF
@@ -21,7 +21,6 @@ while [ \${#} -ne 0 ]; do
 done
 ;
 $(aeten_ads_foreach_option  __aeten_ads_check_option ${args})
-
 EOF
 )"
 }
@@ -32,6 +31,9 @@ aeten_ads_foreach_option() {
 	local option
 	local short
 	local value
+	local requiered
+	local multi
+	local occurence
 	local description
 	local _var_prefix
 	local options
@@ -50,8 +52,13 @@ aeten_ads_foreach_option() {
 ${options}"
 	for opt in ${options_plus_help}; do
 		[ -z "${opt}" ] && continue
-		eval "$(cat - <<< "${opt}"|sed 's/\(\!\)\{0,1\}\([a-zA-Z0-9-]\{1,\}\)\(|\([a-zA-Z0-9]\)\)\{0,1\}\(\s\([<>a-zA-Z0-9-]\{1,\}\)\)\{0,1\}:\s*\(.*\)/option=\2; short=\4; requiered=\1; value="\6"; description="\7"/')"
-		[ -z "${requiered}" ] && requiered=false || requiered=true
+		eval "$(cat - <<< "${opt}"|sed --regexp-extended --quiet 's/^([?*!+]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(\s+([a-zA-Z0-9_|<>!@/-]+))?:\s*(.*)/option=\2; short=\4; occurence=\1; value="\6"; description="\7"/p')"
+		case "${occurence}" in
+			''|'?') requiered=false; multi=false;;
+			'*')    requiered=false; multi=true;;
+			'+')    requiered=true;  multi=true;;
+			'!')    requiered=true;  multi=false;;
+		esac
 		[ -z "${short}" ] && short=$(echo ${option}|cut -c 1)
 		eval "${lambda}"
 	done
@@ -60,17 +67,17 @@ ${options}"
 
 aeten_ads_synopsys_usage() {
 	if ${requiered}; then
-		printf ' -%s|--%s %s' ${short} ${option} "${value}"
+		printf ' -%s|--%s %s' ${short} ${option} "${value//[\!@]/}"
 	else
-		printf ' [-%s|--%s %s]' ${short} ${option} "${value}"
+		printf ' [-%s|--%s %s]' ${short} ${option} "${value//[\!@]/}"
 	fi
 }
 
 aeten_ads_synopsys_man() {
 	if ${requiered}; then
-		printf '.B -%s|--%s\n%s\n' ${short} ${option} "$([ -n "${value}" ] && echo ".I ${value}")"
+		printf '.B -%s|--%s\n%s\n' ${short} ${option} "$([ -n "${value}" ] && echo ".I ${value//[\!@]/}")"
 	else
-		printf '.OP \-%s|--%s%s\n' ${short} ${option} "$([ -n "${value}" ] && echo " ${value}")"
+		printf '.OP \-%s|--%s%s\n' ${short} ${option} "$([ -n "${value}" ] && echo " ${value//[\!@]/}")"
 	fi
 }
 
@@ -121,6 +128,84 @@ aeten_ads_usage() {
 $(aeten_ads_foreach_option aeten_ads_synopsys_man)
 EOF
 	exit ${errno}
+}
+
+aeten_ads_bash_complete() {
+	local cmd=$1
+	cat - << EOF
+_${cmd// /-}_bash_completion() {
+	local completion='$(aeten_ads_foreach_option __aeten_ads_bash_completion_options)'
+	local -A options
+
+	for i in \$(seq 0 \$COMP_CWORD); do
+		case "\${COMP_WORDS[\$i]}" in
+$(aeten_ads_foreach_option __aeten_ads_bash_completion_option)
+		esac
+	done
+	COMPREPLY=( \$(compgen -o nospace -W "\${completion//  / }" -- \${COMP_WORDS[COMP_CWORD]}) )
+	case "\${COMP_WORDS[COMP_CWORD - 1]}" in
+$(aeten_ads_foreach_option __aeten_ads_bash_completion_value)
+	esac
+}
+complete -F "_${cmd// /-}_bash_completion" "${cmd}"
+EOF
+}
+
+__aeten_ads_bash_completion_options() {
+	echo -n "--${option} "
+}
+
+__aeten_ads_bash_completion_option() {
+	${multi} && return;
+	cat - << EOF
+			"-${short} "|"--${option} ")
+				completion=\${completion/--${option} /}
+EOF
+	if [ -z "${value}" ]; then
+		cat - << EOF
+				options+=${short}
+EOF
+	else
+		cat - << EOF
+				[ -n \"\${COMP_WORDS[\$i + 1]}\" ] && options+=${short}
+EOF
+	fi
+	cat - << EOF
+				;;
+EOF
+}
+
+__aeten_ads_bash_completion_value() {
+	# /* file
+	# /*/ directory
+	# | separates a choice
+	cat - << EOF
+		-${short}|--${option})
+EOF
+	if [ "$(type -t "_${cmd}_bash_complete_${option}")" = function ]; then cat - << EOF
+			_${cmd}_bash_complete_${option}
+EOF
+	elif [ -n "${value}" ] && [ -z "${value%/*/}" ]; then cat - << EOF
+			# Directory
+			compopt -o nospace
+			COMPREPLY=( \$(compgen -W "\$([ -d "\${COMP_WORDS[COMP_CWORD]}" ] && find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 -type d -printf '%p/\n' 2>/dev/null || find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 -type d -printf '%p/\n' 2>/dev/null)" -- \${COMP_WORDS[COMP_CWORD]}) )
+EOF
+	elif [ -n "${value}" ] && [ -z "${value%/*}" ]; then cat - << EOF
+			# File
+			compopt -o nospace
+			COMPREPLY=( \$(compgen -W "\$(find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 \( -type d -printf '%p/ ' , -type f -print \) 2>/dev/null)" -- \${COMP_WORDS[COMP_CWORD]}) )
+EOF
+	elif [ -n "${value}" ] && [ -z "${value##*|*}" ]; then cat - << EOF
+			# Choice
+			COMPREPLY=( \$(compgen -W "${value//|/ }" -- \${COMP_WORDS[COMP_CWORD]} ) )
+EOF
+	else cat - << EOF
+			# Other
+EOF
+	fi
+	cat - << EOF
+			;;
+EOF
 }
 
 __aeten_ads_wrong_option() {
