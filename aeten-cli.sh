@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/bin/bash
+
+: ${TERM=linux}
+export TERM
 
 __aeten_cli_colorize() {
 	local color="${1}"; shift
@@ -447,6 +450,25 @@ aeten_cli_check() {
 		[ 'fatal' = ${level} ] && exit ${errno}
 	fi
 	return ${errno}
+}
+
+aeten_cli_unterm() {
+	local unbuffered
+	while [ ${#} -ne 0 ]; do
+		case "${1}" in
+			-u|--unbuffered) unbuffered=' fflush();' ;;
+			*)               echo "Usage: ${FUNCNAME:-${0}} [-u|--unbuffered]" >&2; exit 1 ;;
+		esac
+		shift
+	done
+	gawk "{
+		gsub(/\\x1B\\[[0-9;]*[a-zA-Z]|\\x1B(\\(B|[0-9]+)/, \"\");
+		while (match(\$0, /([^\\r]*)\\r([^\\r]*)(.*)/, group)) {
+			\$0 = group[2] substr(\$0, length(group[2])+((length(group[1]) == 0)? 0: 1), length(group[1])-length(group[2])) group[3];
+		};
+		print;
+		${unbuffered}
+	}"
 }
 
 aeten_cli_import() {
