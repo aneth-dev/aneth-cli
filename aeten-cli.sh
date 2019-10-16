@@ -297,6 +297,52 @@ __read_shadow() {
 	return ${return_code}
 }
 
+aeten_cli_highlight() {
+	local color=7
+	local termcap='bold\nsetaf 7'
+   local tput_color=$(tput colors 2>/dev/null)
+	local pattern
+	local usage="Usage: highlight [-c|--color <black|red|green|yellow|blue|magenta|cyan|white> | -t|--termcap <tput-capabilities>] regex"
+   test -z "${tput_color}" && tput_color=0
+
+   if [ ${tput_color} -lt 8 ]; then
+		echo "No colorized terminal!" >&2
+		exit 1
+	fi
+
+	while [ ${#} -ne 0 ]; do
+		case "${1}" in
+			-c|--color)
+				case "${2}" in
+					black)   color=0;;
+					red)     color=1;;
+					green)   color=2;;
+					yellow)  color=3;;
+					blue)    color=4;;
+					magenta) color=5;;
+					cyan)    color=6;;
+					white)   color=7;;
+					*) printf "Invalid argument.\nUsage: ${usage}\n" >&2; exit 1;;
+				esac
+				termcap="bold\\nsetaf ${color}"
+				shift;;
+			-t|--termcap) termcap="${2}"; shift; break;;
+			-h|--help)
+				echo "Usage: ${usage}"
+				exit 0
+				;;
+			*) break;;
+		esac
+		shift
+	done
+	pattern="$@"
+	if [ -z "${pattern}" ]; then
+		printf "Invalid argument.\nUsage: ${usage}\n" >&2
+		exit 1
+	fi
+	stdbuf -oL awk '{gsub("'"${pattern}"'", "'"$(printf "${termcap}"|tput -S)"'&'"$(tput sgr0)"'"); print}'
+}
+
 aeten_cli_query() {
 	local out
 	local usage
