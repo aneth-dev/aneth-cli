@@ -56,7 +56,7 @@ aeten_ads_foreach_option() {
 ${options}"
 	for opt in ${options_plus_help}; do
 		[ -z "${opt}" ] && continue
-		eval "$(cat - <<< "${opt}"|sed --regexp-extended --quiet 's/^([?*!+]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(\s+([a-zA-Z0-9_:|<>!@/-]+))?:\s*(.*)/option=\2; short=\4; occurence=\1; value="\6"; description="\7"/p')"
+		eval "$(cat - <<< "${opt}"|sed --regexp-extended --quiet 's/^([?*!+]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(\s+([a-zA-Z0-9_:|<>!@/-]+))?:(\s+\\\s+)*\s*([^\s].*)/option=\2; short=\4; occurence=\1; value="\6"; description="\8"/p')"
 		case "${occurence}" in
 			''|'?') requiered=false; multi=false;;
 			'*')    requiered=false; multi=true;;
@@ -91,7 +91,7 @@ aeten_ads_help() {
 
 aeten_ads_groff() {
 	local input="$(sed 's/\\x0/\n/g' /dev/stdin)"
-	for section in name version title short_description description; do
+	for section in name version title short_description description authors copyright copyleft licence license; do
 		__aeten_ads_man_section ${section} "${input}"
 	done
 
@@ -116,6 +116,11 @@ $(echo "${description}"|__aeten_ads_man_inline_style)
 .sp
 .SH OPTIONS
 $(aeten_ads_foreach_option __aeten_ads_man_opt)
+$(test -n "${authors}" && { echo .sp; echo .SH AUTHORS; echo "${authors}"; })
+$(test -n "${copyright}" && { echo .sp; echo .SH COPYRIGHT; echo "© ${copyright}"; })
+$(test -n "${copyleft}" && { echo .sp; echo .SH COPYLEFT; echo "ↄ⃝ ${copyleft}"; })
+$(test -n "${licence}" && { echo .sp; echo .SH LICENCE; echo "${licence}"; })
+$(test -n "${license}" && { echo .sp; echo .SH LICENSE; echo "${license}"; })
 EOF
 }
 
@@ -241,7 +246,7 @@ __aeten_ads_parse_option() {
 	if [ help = "${option}" ]; then
 		echo "-${short}|--${option}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
 	elif [ -z "${value}" ]; then
-		echo "-${short}|--${option}) ${_varname}=true; shift;;"
+		echo "-${short}|--${option}) ${_varname}=true;;"
 	else
 		echo "-${short}|--${option}) [ -z "\$${_varname}" ] && ${_varname}=\${2} || ${_varname}+=\ \${2} ; shift;;"
 	echo;
