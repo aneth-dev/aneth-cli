@@ -351,7 +351,7 @@ aeten_cli_query() {
 	local shadow
 	local return_code
 	shadow=false
-	usage="${FUNCNAME:-${0}} [--help|-h] [--] <message>"
+	usage="${FUNCNAME:-${0}} [--help|-h] [-s|--shadow] [--] <message>"
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
 			-h|--help)     echo "${usage}" >&2; exit 0 ;;
@@ -374,7 +374,7 @@ aeten_cli_query() {
 	[ -t 0 ] && opts="-u -n"
 	__aeten_cli_tag -r ${opts} "${AETEN_CLI_ANSWERED}" >${out}
 	printf "\r" >${out}
-	echo ${REPLY}
+	printf '%s' "${REPLY}"
 }
 
 aeten_cli_confirm() {
