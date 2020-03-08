@@ -25,6 +25,24 @@ _BEOF_
 	shift
 done
 
+ads_print_usage() {
+	local errcode=255
+	local message
+
+	while [ \${#} -ne 0 ]; do
+		case "\${1}" in
+			-e|--errcode) errcode=\${2}; shift ;;
+			*)            break ;;
+		esac
+		shift
+	done
+	message="\${@}"
+	[ -z "\${message}" ] || echo "\${message}" >&2
+	$(readlink -f ${0}) usage "${name}" "\${errcode}" <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'
+	exit "\${errcode}"
+}
+
+
 $(aeten_ads_foreach_option  __aeten_ads_check_option ${args})
 EOF
 }
