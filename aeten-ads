@@ -136,7 +136,7 @@ $(echo "${description}"|__aeten_ads_man_inline_style)
 $(aeten_ads_foreach_option __aeten_ads_man_opt)
 $(test -n "${authors}" && { echo .sp; echo .SH AUTHORS; echo "${authors}"; })
 $(test -n "${copyright}" && { echo .sp; echo .SH COPYRIGHT; echo "© ${copyright}"; })
-$(test -n "${copyleft}" && { echo .sp; echo .SH COPYLEFT; echo "ↄ⃝ ${copyleft}"; })
+$(test -n "${copyleft}" && { echo .sp; echo .SH COPYLEFT; echo "🄯 ${copyleft}"; })
 $(test -n "${licence}" && { echo .sp; echo .SH LICENCE; echo "${licence}"; })
 $(test -n "${license}" && { echo .sp; echo .SH LICENSE; echo "${license}"; })
 EOF
