@@ -138,7 +138,7 @@ $(test -n "${authors}" && { echo .sp; echo .SH AUTHORS; echo "${authors}"; })
 $(test -n "${copyright}" && { echo .sp; echo .SH COPYRIGHT; echo "© ${copyright}"; })
 $(test -n "${copyleft}" && { echo .sp; echo .SH COPYLEFT; echo "🄯 ${copyleft}"; })
 $(test -n "${licence}" && { echo .sp; echo .SH LICENCE; echo "${licence}"; })
-$(test -n "${license}" && { echo .sp; echo .SH LICENSE; echo "${license}"; })
+$(test -n "${license}" && { echo .sp; echo .SH LICENCE; echo "${license}"; })
 EOF
 }
 
