@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# TODO: help
+# Depends on grep, sed, xargs, dc
+
+# hex2bin depends on grep, sed, xargs
+if [ -n "$BASH" ]; then
+hex2bin() {
+	local hexval="$1"
+	echo ${hexval} | grep -q -G '^[0-9a-fA-F]\+$' || { echo "Invalid hexadecimal argument '${hexval}'." >&2; return 1; }
+
+	if [ "$(( "${#hexval}" % 2 ))" -eq 1 ]; then
+		hexval=0${hexval}
+	fi
+	echo $hexval | sed 's/\([0-9a-fA-F]\{2\}\)/\\\\\x\1/g;s/ .*//' | xargs printf
+}
+else
+hex2bin() {
+	local hexval="$1"
+	echo ${hexval} | grep -q -G '^[0-9a-fA-F]\+$' || { echo "Invalid hexadecimal argument '${hexval}'." >&2; return 1; }
+
+	if [ "$(expr "${#hexval}" % 2)" -eq 1 ]; then
+		hexval=0${hexval}
+	fi
+	echo $hexval | sed 's/\([0-9a-fA-F]\{2\}\)/\\\\\x\1/g;s/ .*//' | xargs printf
+}
+fi
+
+
+# dec2hex on grep, dc
+dec2hex() {
+	local decval="$1"
+	echo ${decval} | grep -q -G '^[0-9]\+$' || { echo "Invalid decimal argument '${decval}'." >&2; return 1; }
+	echo "10i16o${decval}p" | dc
+}
+
+
+if [ -n "$BASH" ]; then
+hex2dec() {
+	local hexval="${1^^}"
+	echo $((16#${hexval}))
+}
+else
+hex2dec() {
+	local hexval=$(echo "${1}" | tr '[:lower:]' '[:upper:]')
+	if [ "$(expr "${#hexval}" % 2)" -eq 1 ]; then
+		hexval=0${hexval}
+	fi
+	echo "10o16i${hexval}p" | dc
+}
+fi
