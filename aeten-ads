@@ -266,7 +266,7 @@ __aeten_ads_parse_option() {
 	elif [ -z "${value}" ]; then
 		echo "-${short}|--${option}) ${_varname}=true;;"
 	else
-		echo "-${short}|--${option}) [ -z "\$${_varname}" ] && ${_varname}=\${2} || ${_varname}+=\ \${2} ; shift;;"
+		echo "-${short}|--${option}) [ -z "\$${_varname}" ] && ${_varname}=\"\${2}\" || ${_varname}+=(\"\${2}\"); shift;;"
 	echo;
 	fi
 }
