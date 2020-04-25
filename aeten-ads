@@ -3,305 +3,729 @@
 # Depends:
 # bin: bash cat cut sed(GNU) grep man groff
 # debian: bash coreutils grep man-db groff-base
-input=$(sed 's/'"'"'/\\[u0027]/g; s/`/\\[u0060]/g; s/\$/\\[u0024]/g; s/  / \\ /g; s/\\%/\\[u005C]%/g' /dev/stdin)
 
-aeten_ads_init() {
-	local args=${@}
-	__aeten_ads_man_section name "${input}"
-	cat - << EOF
-while [ \${#} -ne 0 ]; do
-	case "\${1}" in
-		bash_completion)
-			shift
-			cat - << _BEOF_ | "$0" bash_complete ${name} \$@
-${input}
-_BEOF_
-			exit 0
-			;;
-		$(aeten_ads_foreach_option  __aeten_ads_parse_option ${args})
-		--) shift; break;;
-		$(__aeten_ads_wrong_option)
-	esac
-	shift
-done
+if ! ${ADS_INITILIZED:-false}; then
+declare -x ADS_INITILIZED=true
+. <($0 init -- ${@} <<-_EOF_
+#NAME: ads
+#TITLE: ADS Manual
+#VERSION: 1.0
+#RESUME: Auto documented script.
+#DESCRIPTION: _ADS_ permit script using it to be self and automatically documented. This tool permit to generate code to initializing options command line and add a _help_ which generates one in the manpage format.
+#AUTHOR: Thomas Pérennou <thomas.perennou@aeten.net>
+#LICENCE: GLPv3
+#COPYLEFT: Thomas Pérennou
+?prefix NAME: Prefixes all generated variables by _NAME\__ (note the underscore after _NAME_).
+@init: Initialize a script. A shell script must call it like _. <(ads init - -- \${@} <<EOF […] EOF)_.
+@usage: Print script usage.
+@bash-complete: Generate Bash completion code.
+_EOF_
+)
+fi
 
-ads_print_usage() {
-	local errcode=255
-	local message
+init() {
+	local _name _cmd _opt
+	local ADS_CMD_PFX=
+	local ADS_OPT_PFX=
+	local ADS_INPUT_FILE=/dev/stdin
 
-	while [ \${#} -ne 0 ]; do
-		case "\${1}" in
-			-e|--errcode) errcode=\${2}; shift ;;
-			*)            break ;;
+	while [ $# -ne 0 ]; do
+		case "$1" in
+			--prefix)     ADS_CMD_PFX=${2^^}_; ADS_OPT_PFX=${2^^}_; shift;;
+			--opt-prefix) ADS_OPT_PFX=${2^^}_; shift;;
+			--cmd-prefix) ADS_CMD_PFX=${2^^}_; shift;;
+			--)           shift; break;;
+			 *)           break;;
 		esac
 		shift
 	done
-	message="\${@}"
-	[ -z "\${message}" ] || echo "\${message}" >&2
-	$(readlink -f ${0}) usage "${name}" "\${errcode}" <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'
-	exit "\${errcode}"
+	if [[ ${DEBUG} = yes ]]; then
+		for _cmd in ${ADS_CMDID[@]}; do
+			__debug_command ${ADS_CMD[${_cmd}]}
+		done
+	fi
+
+	__parse_cmdline \
+		--cmdline-pre-hook  __pre_init \
+		--cmdline-post-hook __post_init \
+		--cmd-post-hook     __cmd_init \
+		--opt-hook          __opt_init \
+		--cmd-error-hook    __cmd_error \
+		--opt-error-hook    __opt_error \
+		-- $@
 }
 
-
-$(aeten_ads_foreach_option  __aeten_ads_check_option ${args})
-EOF
+usage() {
+	while [ $# -ne 0 ]; do
+		case "$1" in
+			--)           shift; break;;
+			 *)           break;;
+		esac
+		shift
+	done
+	groff -T utf8 -man <<-EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' 
+		.TH
+		.SH $(echo "$@"|__filter_input|__man_inline_style) Usage:
+		$(__synopsys)
+	EOF
 }
 
-aeten_ads_foreach_option() {
-	local lambda=${1}; shift
-	local opt
-	local option
-	local short
-	local value
-	local requiered
-	local multi
-	local occurence
-	local description
-	local _var_prefix
-	local options
-	local options_plus_help
-	local ifs_backup="${IFS}"
-	while [ ${#} -ne 0 ]; do
-		case "${1}" in
-			prefix) _var_prefix="${2}"; shift;;
+bash-complete() {
+	local _command=$1
+	__parse_cmdline \
+		--cmdline-pre-hook  __pre_init \
+		--cmdline-post-hook __post_init \
+		--cmd-post-hook     __cmd_init \
+		--opt-hook          __opt_init \
+		--cmd-error-hook    __cmd_error \
+		--opt-error-hook    __opt_error \
+		-- $@
+
+	cat - <<-EOF
+		_${_command// /-}_bash_completion() {
+			local completion='$(foreach_option __bash_completion_options)'
+			local -A options
+
+			for i in \$(seq 0 \$COMP_CWORD); do
+				case "\${COMP_WORDS[\$i]}" in
+					$(foreach_option __bash_completion_option)
+				esac
+			done
+			COMPREPLY=( \$(compgen -o nospace -W "\${completion//  / }" -- \${COMP_WORDS[COMP_CWORD]}) )
+			case "\${COMP_WORDS[COMP_CWORD - 1]}" in
+		$(foreach_option __bash_completion_value)
+			esac
+		}
+		complete -F "_${cmd// /-}_bash_completion" "${cmd}" $@
+	EOF
+}
+
+__parse_cmdline() {
+	local _cmdline_pre_hook _cmdline_post_hook _cmd_pre_hook _cmd_post_hook _opt_hook
+	local _argv _id _varname _cmdid _cmd _opt _command _found
+
+	while [ $# -ne 0 ]; do
+		case "$1" in
+			--cmd-pre-hook)      _cmd_pre_hook=$2; shift;;
+			--cmd-post-hook)     _cmd_post_hook=$2; shift;;
+			--cmdline-pre-hook)  _cmdline_pre_hook=$2; shift;;
+			--cmdline-post-hook) _cmdline_post_hook=$2; shift;;
+			--opt-hook)          _opt_hook=$2; shift;;
+			--cmd-error-hook)    _cmd_error_hook=$2; shift;;
+			--opt-error-hook)    _opt_error_hook=$2; shift;;
+			--)                  shift; break;;
+			 *)                  break;;
 		esac
 		shift
 	done
 
-	IFS=$'\n'
-	options=$(echo "${input}"|sed '/^\s*#/d')
-	options_plus_help="help: Print this help.
-${options}"
-	for opt in ${options_plus_help}; do
-		[ -z "${opt}" ] && continue
-		eval "$(cat - <<< "${opt}"|sed --regexp-extended --quiet 's/^([?*!+]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(\s+([a-zA-Z0-9_:|<>!@/-]+))?:(\s+\\\s+)*\s*([^\s].*)/option=\2; short=\4; occurence=\1; value="\6"; description="\8"/p')"
-		case "${occurence}" in
-			''|'?') requiered=false; multi=false;;
-			'*')    requiered=false; multi=true;;
-			'+')    requiered=true;  multi=true;;
-			'!')    requiered=true;  multi=false;;
-		esac
-		[ -z "${short}" ] && short=$(echo ${option}|cut -c 1)
-		eval "${lambda}"
-	done
-	IFS="${ifs_backup}"
-}
+	if declare -F "${_cmdline_pre_hook}" &>/dev/null; then
+		${_cmdline_pre_hook}
+	fi
+	local -n _cmd=ADS_CMD_0
+	while [ $# -ne 0 ]; do
+		if [[ $1 = -- ]]; then
+			break
+		fi
+		if [[ $1 =~ ^- ]]; then
+			# Option
+			local _alias _optname _found=false
+			for _id in ${_cmd[options]}; do
+				local -n _opt=${ADS_OPT[${_id%%|*}]}
+				case $1 in
+					--?*)  _optname=${1:2};;
+					-[^-]) _optname=${1:1};;
+					--)    shift; continue;;
+				esac
+				for _alias in ${_opt[name]} ${_opt[alias]//|/ }; do
+					if [[ ${_optname} == ${_alias} ]]; then
+						if (( ${#_opt[value]} == 0 )); then
+							_opt=true
+						else
+							_opt=$2
+							shift
+						fi
+						_found=true
+						break
+					fi
+				done
+			done
+			if ! $_found && declare -F "${_opt_error_hook}" &>/dev/null; then
+				${_opt_error_hook} $1
+			fi
+		else
+			# Command
+			_id=$(__join . ${_cmdid} $1)
+			_varname=${ADS_CMD[${_id}]}
+			if declare -p "${_varname}" &>/dev/null; then
+				local -n _cmd=${ADS_CMD[${_id}]}
+				_cmd=true
+				_cmdid=${_id}
+				shift
+				continue
+			elif declare -F "${_cmd_error_hook}" &>/dev/null; then
+				${_cmd_error_hook} ${_id}
+			fi
+		fi
 
-aeten_ads_synopsys_usage() {
-	if ${requiered}; then
-		printf ' -%s|--%s %s' ${short} ${option} "${value//[\/]/}"
-	else
-		printf ' [-%s|--%s %s]' ${short} ${option} "${value//[\/]/}"
+		shift
+	done
+	_command=${!_cmd}
+
+	for _id in ${ADS_CMDID[@]}; do
+		local -n _cmd=${ADS_CMD[${_id}]}
+		if (( ${#_cmd} == 0 )); then
+			_cmd=false
+		fi
+		if declare -F "${_cmd_pre_hook}" &>/dev/null; then
+			${_cmd_pre_hook} ${!_cmd}
+		fi
+			for _id in ${_cmd[options]}; do
+				local -n _opt=${ADS_OPT[${_id%%|*}]}
+				if (( ${#_opt[value]} == 0 )) && (( ${#_opt} == 0 )); then
+					_opt=false
+				fi
+				if declare -F "${_opt_hook}" &>/dev/null; then
+					${_opt_hook} ${!_opt}
+				fi
+			done
+		if declare -F "${_cmd_post_hook}" &>/dev/null; then
+			${_cmd_post_hook} ${!_cmd}
+		fi
+	done
+
+	if declare -F "${_cmdline_post_hook}" &>/dev/null; then
+		if declare -p "${!_command}" &>/dev/null; then
+			${_cmdline_post_hook} ${!_command}
+		else
+			${_cmdline_post_hook} ${ADS_CMD}
+		fi
 	fi
 }
 
-aeten_ads_synopsys_man() {
-	if ${requiered}; then
-		printf '.B -%s|--%s\n%s\n' ${short} ${option} "$([ -n "${value}" ] && echo ".I ${value//[\/]/}")"
+__join() {
+	local _sep=$1; shift
+	local _string=$1; shift
+	while [ $# -ne 0 ]; do
+		_string+=${_sep}$1
+		shift
+	done
+	echo ${_string}
+}
+
+__ads_heredoc() {
+	cat - <<-_BEOF_
+		${ADS_INPUT}
+	_BEOF_
+}
+
+__pre_init() {
+	cat - <<-EOF
+		__ads_heredoc() {
+			cat - <<-_BEOF_
+				${ADS_INPUT}
+			_BEOF_
+		}
+
+		${ADS_OPT_PFX,,}usage() {
+			local errno=1
+			while [ \$# -ne 0 ]; do
+				case "\$1" in
+					--errno)      errno=\$2; shift;;
+					--)           shift; break;;
+					 *)           break;;
+				esac
+				shift
+			done
+			__ads_heredoc|$(readlink -f $0) usage -- ${ADS_NAME,,}: \$@ >/dev/\$( [ "\${errno}" = 0 ] && echo stdout || echo stderr)
+			exit \${errno}
+		}
+	EOF
+}
+
+__cmd_init() {
+	if [[ $1 = ADS_CMD_0 ]]; then
+		return
+	fi 
+	local -n _cmd=$1
+	local _varname=${_cmd[id]^^}
+	echo "declare -g ${ADS_OPT_PFX}${_varname//[.-]/_}=${_cmd}"
+}
+
+__post_init() {
+	local -n _cmd=$1
+	local _varname=${_cmd[id]^^}
+	_varname=ADS_CMD_${_varname//[.-]/_}
+
+	if [[ ${_cmd[id]} == bash-complete ]] && [[ ${ADS_NAME} =~ ^(AETEN_)?ADS$ ]]; then
+		__add_command ads.bash-complete "Bash completion auto generation from _ADS_."
+	fi
+	if ${ADS_OPT_HELP:-false}; then
+		__help
 	else
-		printf '.OP \-%s|--%s%s\n' ${short} ${option} "$([ -n "${value}" ] && echo " ${value//[\/]/}")"
+		echo "declare -g ADS_CMD=${_varname}"
 	fi
 }
 
-aeten_ads_help() {
-	aeten_ads_groff|man -l -
-}
-
-aeten_ads_groff() {
-	local input="$(sed 's/\\x0/\n/g' /dev/stdin)"
-	for section in name version title short_description description authors copyright copyleft licence license; do
-		__aeten_ads_man_section ${section} "${input}"
-	done
-
-	cat - << EOF
-.TH $(echo $name|tr '[:lower:]' '[:upper:]') 1 "$(date +%D)" "$name ${version}" "${title}"
-.ie \n(.g .ds Aq \(aq
-.el       .ds Aq '
-.nh
-.ad l
-.SH NAME
-.NH 1 ${name}
-.PP
-${name} - $(echo "${short_description}"|__aeten_ads_man_inline_style)
-.SH SYNOPSYS
-.
-.SY ${name}
-$(aeten_ads_foreach_option aeten_ads_synopsys_man)
-.fi
-.sp
-.SH DESCRIPTION
-$(echo "${description}"|__aeten_ads_man_inline_style)
-.sp
-.SH OPTIONS
-$(aeten_ads_foreach_option __aeten_ads_man_opt)
-$(test -n "${authors}" && { echo .sp; echo .SH AUTHORS; echo "${authors}"; })
-$(test -n "${copyright}" && { echo .sp; echo .SH COPYRIGHT; echo "© ${copyright}"; })
-$(test -n "${copyleft}" && { echo .sp; echo .SH COPYLEFT; echo "🄯 ${copyleft}"; })
-$(test -n "${licence}" && { echo .sp; echo .SH LICENCE; echo "${licence}"; })
-$(test -n "${license}" && { echo .sp; echo .SH LICENCE; echo "${license}"; })
-EOF
-}
-
-aeten_ads_usage() {
-	local input="$(sed 's/\\x0/\n/g' /dev/stdin)"
-	local script=${1}
-	shift
-	local errno=${1}
-	shift
-	groff -T utf8 -man << EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' >/dev/fd/$([ ${errno} -eq 0 ] && echo 1 || echo 2)
-.TH
-.SH $@ Usage:
-.SY $(basename ${script})
-$(aeten_ads_foreach_option aeten_ads_synopsys_man)
-EOF
-	exit ${errno}
-}
-
-aeten_ads_bash_complete() {
-	local cmd=$1
-	cat - << EOF
-_${cmd// /-}_bash_completion() {
-	local completion='$(aeten_ads_foreach_option __aeten_ads_bash_completion_options)'
-	local -A options
-
-	for i in \$(seq 0 \$COMP_CWORD); do
-		case "\${COMP_WORDS[\$i]}" in
-$(aeten_ads_foreach_option __aeten_ads_bash_completion_option)
+__opt_init() {
+	local -n _opt=$1
+	local _varname=${_opt[id]^^}
+	_varname=${ADS_OPT_PFX}${_varname//[.-]/_}
+	if (( ${#_opt} > 0 )); then
+		echo "declare -g ${_varname}='${_opt}'"
+		case ${_opt[value]} in
+			!/*/) [[ -d $_opt ]] || {
+				echo Directory for option --${_opt[name]} must exists. >&2
+				echo exit 1
+			} ;;
+			!/*)  [[ -r $_opt ]] || {
+				echo File for option --${_opt[name]} must exists and be readable. >&2
+				echo exit 1
+			} ;;
+			*\|*) [[ ${_opt} =~ ^${_opt[value]}$ ]] || {
+				echo Value for option --${_opt[name]} must be one of ${_opt[value]}. >&2
+				echo exit 1
+			} ;;
 		esac
-	done
-	COMPREPLY=( \$(compgen -o nospace -W "\${completion//  / }" -- \${COMP_WORDS[COMP_CWORD]}) )
-	case "\${COMP_WORDS[COMP_CWORD - 1]}" in
-$(aeten_ads_foreach_option __aeten_ads_bash_completion_value)
-	esac
-}
-complete -F "_${cmd// /-}_bash_completion" "${cmd}" $@
-EOF
+	elif ${_opt[requiered]}; then
+		echo "echo ${ADS_OPT_PFX,,}usage 'Option --${_opt[name]} is requiered.'"
+	fi
 }
 
-__aeten_ads_bash_completion_options() {
+__cmd_error() {
+	usage "${ADS_CMD_0[name]}: \"${1//./ }\" is not a ${ADS_CMD_0[name]} command. See '${ADS_CMD_0[name]} --help'." >&2
+	echo exit 1
+	exit 0
+}
+
+__opt_error() {
+	usage "${ADS_CMD_0[name]}: $1 is not a ${ADS_CMD_0[name]} option. See '${ADS_CMD_0[name]} --help'." >&2
+	echo exit 1
+	exit 0
+}
+
+__heredoc() {
+	cat - <<-_BEOF_
+		${ADS_INPUT}
+	_BEOF_
+}
+
+__synopsys_man() {
+	local _value _standard=true
+	if [[ $1 = --no-standard ]]; then
+		_standard=false
+		shift
+	fi
+	local -n _opt=$1
+	_value=${_opt[value]}
+	_value=${_value#/}
+	_value=${_value#\!/}
+	_value=${_value%/}
+	if ${_standard}; then
+		if ${_opt[requiered]}; then
+			printf '.B -%s\\fR|\\fB--%s\n%s\n' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo ".I ${_value}")"
+		else
+			printf '.OP \-%s\\fR|\\fB--%s%s\n' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " ${_value}")"
+		fi
+	else
+		if ${_opt[requiered]}; then
+			printf '\\fB  -%s\\fR|\\fB--%s\n%s\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI ${_value}")"
+		else
+			printf '\\fR [\\fB-%s\\fR|\\fB--%s%s\\fR]\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI ${_value}")"
+		fi
+	fi
+}
+
+__man_opt() {
+	local -n _opt=$1
+	local _value _formated_value
+	_value=${_opt[value]}
+	if [ -n "${_value}" ]; then
+		_value=${_value#/}
+		_value=${_value#\!/}
+		_value=${_value%/}
+
+		formated_value="\\ \\fI${_value}"
+	fi
+	cat - <<-EOF
+		.TP
+		.B \\-\\-${_opt[name]}${formated_value}\\fR, \\fB\\-\\-${_opt[alias]}${formated_value} \\\fR
+		 $(echo "${_opt[description]}"|__man_inline_style)
+		.sp
+	EOF
+}
+
+__man_inline_style() {
+	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\]?)_([^_]+)_( )?/\1\\fI\2\\fR\3/g;s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
+}
+
+__help() {
+	__groff|man -l - >&2
+	echo exit 0
+}
+
+__synopsys() {
+	local _id
+	echo ".SY ${ADS_CMD_0[name]}"
+	for _id in ${ADS_CMD_0[options]}; do
+		__synopsys_man ${ADS_OPT[${_id%%|*}]}
+	done
+	if (( ${#ADS_CMDID[@]} > 1 )); then
+		echo "<_command_> [<_args_>]"|__man_inline_style
+		for _id in ${ADS_CMDID[@]:1}; do
+			local -n _cmd=${ADS_CMD[${_id}]}
+			echo ".SY ${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ }"
+			for _id in ${_cmd[options]}; do
+				__synopsys_man ${ADS_OPT[${_id%%|*}]}
+			done
+		done
+	fi
+}
+
+__groff() {
+	cat - <<-EOF
+		.TH ${ADS_CMD_0[name]^^} 1 "$(date +%D)" "${ADS_CMD_0[name]^^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[title]}"
+		.ie \n(.g .ds Aq \(aq
+		.el       .ds Aq '
+		.nh
+		.ad l
+		.SH NAME
+		.NH 1 ${ADS_CMD_0[name]}
+		.PP
+		${ADS_CMD_0[name]} - $(echo "${ADS_CMD_0[resume]}"|__man_inline_style)
+		.SH SYNOPSYS
+		.
+		$(__synopsys)
+		.fi
+		.sp
+		.SH DESCRIPTION
+		$(echo "${_cmd[description]}"|__man_inline_style)
+		.sp
+		$(if (( ${#ADS_CMDID[@]} > 1 )); then
+			echo -e '.SH COMMANDS\n.'
+			for _id in ${ADS_CMDID[@]:1}; do
+				local -n _cmd=${ADS_CMD[${_id}]}
+				echo -en ".SS \\\fB ${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ } "
+				for _id in ${_cmd[options]}; do
+					 __synopsys_man --no-standard ${ADS_OPT[${_id%%|*}]}
+				done
+				echo
+				echo "${_cmd[description]}"|__man_inline_style
+				for _id in ${_cmd[options]}; do
+					__man_opt ${ADS_OPT[${_id%%|*}]}
+				done
+			echo .sp
+			done
+			echo .sp
+		fi)
+		.SH OPTIONS
+		$(for _id in ${ADS_CMD_0[options]}; do
+			__man_opt ${ADS_OPT[${_id%%|*}]}
+		done)
+		$(test -n "${_cmd[authors]}" && { echo .sp; echo .SH AUTHORS; echo "${_cmd[authors]}"; })
+		$(test -n "${_cmd[copyright]}" && { echo .sp; echo .SH COPYRIGHT; echo "© ${_cmd[copyright]}"; })
+		$(test -n "${_cmd[copyleft]}" && { echo .sp; echo .SH COPYLEFT; echo "🄯 ${_cmd[copyleft]}"; })
+		$(test -n "${_cmd[licence]}" && { echo .sp; echo .SH LICENCE; echo "${_cmd[licence]}"; })
+		$(test -n "${_cmd[license]}" && { echo .sp; echo .SH LICENCE; echo "${_cmd[license]}"; })
+	EOF
+}
+
+__bash_completion_options() {
 	echo -n "--${option} "
 }
 
-__aeten_ads_bash_completion_option() {
+__bash_completion_option() {
 	${multi} && return;
-	cat - << EOF
+	cat - <<-EOF
 			"-${short} "|"--${option} ")
 				completion=\${completion/--${option} /}
-EOF
+	EOF
 	if [ -z "${value}" ]; then
-		cat - << EOF
+		cat - <<-EOF
 				options+=${short}
-EOF
+		EOF
 	else
-		cat - << EOF
+		cat - <<-EOF
 				[ -n \"\${COMP_WORDS[\$i + 1]}\" ] && options+=${short}
-EOF
+		EOF
 	fi
-	cat - << EOF
+	cat - <<-EOF
 				;;
-EOF
+	EOF
 }
 
-__aeten_ads_bash_completion_value() {
+__add_command() {
+	local _id=$1
+	local _description=$2
+
+	local _name=${_id##*.}
+	local _varname=${_id^^}
+	_varname=ADS_OPT_${_varname//[.-]/_}
+	declare -gA ${_varname}
+	local -n _cmd=${_varname}
+	_cmd=(
+		[0]=
+		[id]=${_id}
+		[name]=${_name}
+		[description]=${_description}
+		[options]=
+	)
+	ADS_CMDID+=(${_id})
+	ADS_CMD[${_id}]=${_varname}
+}
+
+__add_help() {
+	local -n _cmd=$1
+
+	local _optname=$(__join _ ${_cmd[id]^^} HELP)
+	_optname=ADS_OPT_${_optname//[.-]/_}
+	declare -gA ${_optname}
+	local -n _option=${_optname}
+	_option[0]=
+	_option[id]=$(__join . ${_cmd[id]} help)
+	_option[name]=help
+	_option[alias]=h
+	_option[value]=
+	_option[command]=${_cmd[id]}
+	_option[requiered]=false
+	_option[multi]=false
+	_option[description]="Print _${_cmd[name]}_ help."
+	ADS_OPT[${_option[id]}]=${_optname}
+	_cmd[options]+=" ${_option[id]}|h"
+}
+
+__filter_input() {
+	sed 's/\\\([^_]\|$\)/\\e\1/g
+		s/  / \\ /g
+		s/'"'"'/\\[u0027]/g
+		s/"/\\[u0022]/g
+		s/`/\\[u0060]/g
+		s/\$/\\[u0024]/g
+	'
+}
+
+__init() {
+	local _opt _option_level _option_command _command _option _COMMAND _OPTION _option2 _OPTION2 _requiered _multi _occurence _name _alias _ads_name
+	local -n _cmd
+	local _spaces=$'[ \t]'
+	local -i _level=0
+	local IFS
+
+	while [ $# -ne 0 ]; do
+		case "$1" in
+			 -)           ADS_INPUT_FILE=/dev/stdin;;
+			 --)          shift; break;;
+			 *)           break;;
+		esac
+		shift
+	done
+
+	declare -gr ADS=$(basename $(readlink -f ${0}))
+	if [[ ${ADS} =~ ^(aeten-)?ads$ ]]; then
+		_name=$(basename $(ps -p $PPID -o comm=))
+	else
+		_name=${ADS}
+	fi
+	_name=${_name^^}
+	_name=${_name//[. ]/_}
+
+	declare -gr ADS_NAME=${_name//-/_}
+	declare -gr ADS_INPUT=$(__filter_input ${ADS_INPUT_FILE:-/dev/stdin})
+	declare -gA ADS_OPT
+	declare -ga ADS_CMDID=(0)
+	declare -gA ADS_CMD=([${ADS_CMDID}]=ADS_CMD_0)
+	declare -gA ADS_CMD_0=(
+		[0]=
+		[id]=
+		[name]=${ADS_NAME,,}
+		[description]=
+		[options]=
+	)
+	__add_help ${ADS_CMD[${ADS_CMDID}]}
+
+	IFS=$'\n'
+	for _opt in ${ADS_INPUT}; do
+		unset ISF
+		[ -z "${_opt}" ] && continue
+		if [[ ${_opt} =~ ^$'\t'* ]]; then
+			_option_level=${#BASH_REMATCH[0]}
+		else # Should not occure
+			continue
+		fi
+		if [[ ${_opt} =~ ^#([a-zA-Z0-9-]+)${_spaces}*:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+			ADS_CMD_0[${BASH_REMATCH[1],,}]=${BASH_REMATCH[3]}
+		elif [[ ${_opt} =~ ^($'\t'{$_option_level})@([a-zA-Z0-9-]+):(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+			if ((${_option_level} == 0)); then
+				_option_command=${BASH_REMATCH[2]}
+			elif ((${_option_level} > ${_level})); then
+				_option_command=${_command}.${BASH_REMATCH[2]}
+			else
+				_command=${_command%.*}
+				until ((${_option_level} == ${_level})); do
+					command=${_command%.*}
+					let _level--
+				done
+				_option_command=${_command}.${BASH_REMATCH[2]}
+			fi
+			_level=${_option_level}
+			_command=${_option_command}
+			_description=${BASH_REMATCH[4]}
+			_COMMAND=ADS_CMD_${_command^^}
+			_COMMAND=${_COMMAND//[.-]/_}
+			ADS_CMDID+=(${_command})
+			ADS_CMD[${_command}]=${_COMMAND}
+			declare -gA ${_COMMAND}
+			local -n _CMD=${_COMMAND}
+			_CMD=(
+				[id]=${_command}
+				[name]=${BASH_REMATCH[2]}
+				[description]=${BASH_REMATCH[4]}
+				[options]=
+			)
+		elif (( ${_option_level} == 0 )); then
+			_option_command=
+			_command=
+			_level=0
+		elif ((${_option_level} > ${_level})); then
+			_option_command=
+			_level=$((${_option_level}-1))
+		else
+			_option_command=
+			_command=${_command%.*}
+			until ((${_option_level} == ${_level})); do
+				_command=${_command%.*}
+				let _level--
+			done
+			let _level--
+		fi
+		if [[ ${_opt} =~ ^${_spaces}*([!+*?]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(${_spaces}+([!:|@_/a-zA-Z0-9]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+			_option=$(__join . ${_command} ${BASH_REMATCH[2]})
+			_OPTION=${_option^^}
+			_OPTION=ADS_OPT_${_OPTION//[.-]/_}
+			_occurence=${BASH_REMATCH[1]}
+			case "${_occurence}" in
+				''|'?') _requiered=false; _multi=false;;
+				   '*') _requiered=false; _multi=true;;
+				   '+') _requiered=true;  _multi=true;;
+				   '!') _requiered=true;  _multi=false;;
+			esac
+			_name=${BASH_REMATCH[2]}
+			_alias=${BASH_REMATCH[4]}
+			((${#_alias} == 0)) && _alias=${_name:0:1}
+			if ((${#_command} == 0)); then
+				_COMMAND=ADS_CMD_0
+			else
+				_COMMAND=${_command^^}
+				_COMMAND=ADS_CMD_${_COMMAND//[.-]/_}
+			fi
+			declare -gA ${_OPTION}
+			local -n _OPT=${_OPTION}
+			_OPT=(
+				[0]=
+				[id]=${_option}
+				[name]=${_name}
+				[alias]=${_alias}
+				[value]=${BASH_REMATCH[6]}
+				[command]=${_command}
+				[requiered]=${_requiered}
+				[multi]=${_multi}
+				[description]=${BASH_REMATCH[8]}
+			)
+			local -n _CMD=${_COMMAND}
+			_CMD[options]+=" ${_option}|${_alias}"
+			ADS_OPT[${_option}]=${_OPTION}
+			# Add alias 
+			_option2=$(__join . ${_command} ${_alias})
+			_OPTION2=ADS_OPT[${_option2}]
+			if ! declare -p "${!_OPTION2}" >& /dev/null; then
+				ADS_OPT[${_option}]=${_OPTION}
+			elif [[ ${DEBUG} = yes ]]; then
+				echo "[WARNING] While processing option alias ${_alias} for option ${_alias} (already taken by ${_OPTION2[id]})" >&2
+			fi
+		fi
+	done
+}
+
+__bash_completion_value() {
 	# /* file
 	# /*/ directory
 	# | separates a choice
-	cat - << EOF
+	cat - <<-EOF
 		-${short}|--${option})
-EOF
-	cat - << EOF
-			if [ "\$(type -t "_${cmd}_bash_complete_${option}")" = function ]; then
-				_${cmd}_bash_complete_${option}
-			else
-EOF
-	if [ -n "${value}" ] && [ -z "${value%/*/}" ]; then cat - << EOF
-				# Directory
-				compopt -o nospace
-				COMPREPLY=( \$(compgen -W "\$([ -d "\${COMP_WORDS[COMP_CWORD]}" ] && find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 -type d -printf '%p/\n' 2>/dev/null || find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 -type d -printf '%p/\n' 2>/dev/null)" -- \${COMP_WORDS[COMP_CWORD]}) )
-EOF
-	elif [ -n "${value}" ] && [ -z "${value%/*}" ]; then cat - << EOF
-				# File
-				compopt -o nospace
-				COMPREPLY=( \$(compgen -W "\$(find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 \( -type d -printf '%p/ ' , -type f -print \) 2>/dev/null)" -- \${COMP_WORDS[COMP_CWORD]}) )
-EOF
-	elif [ -n "${value}" ] && [ -z "${value##*|*}" ]; then cat - << EOF
-				# Choice
-				COMPREPLY=( \$(compgen -W "${value//|/ }" -- \${COMP_WORDS[COMP_CWORD]} ) )
-EOF
-	else cat - << EOF
-				# Other
-				true
-EOF
+		if [ "\$(type -t "_${cmd}_bash_complete_${option}")" = function ]; then
+			_${cmd}_bash_complete_${option}
+		else
+	EOF
+	if [ -n "${value}" ] && [ -z "${value%/*/}" ]; then
+		cat - <<-EOF
+			# Directory
+			compopt -o nospace
+			COMPREPLY=( \$(compgen -W "\$([ -d "\${COMP_WORDS[COMP_CWORD]}" ] && find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 -type d -printf '%p/\n' 2>/dev/null || find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 -type d -printf '%p/\n' 2>/dev/null)" -- \${COMP_WORDS[COMP_CWORD]}) )
+		EOF
+	elif [ -n "${value}" ] && [ -z "${value%/*}" ]; then
+		cat - <<-EOF
+			# File
+			compopt -o nospace
+			COMPREPLY=( \$(compgen -W "\$(find \${COMP_WORDS[COMP_CWORD]}* -maxdepth 0 \( -type d -printf '%p/ ' , -type f -print \) 2>/dev/null)" -- \${COMP_WORDS[COMP_CWORD]}) )
+		EOF
+	elif [ -n "${value}" ] && [ -z "${value##*|*}" ]; then
+		cat - <<-EOF
+			# Choice
+			COMPREPLY=( \$(compgen -W "${value//|/ }" -- \${COMP_WORDS[COMP_CWORD]} ) )
+		EOF
+	else
+		cat - <<-EOF
+			# Other
+			true
+		EOF
 	fi
-	cat - << EOF
+	cat - <<-EOF
 			fi
 			;;
-EOF
+	EOF
 }
 
-__aeten_ads_wrong_option() {
-		echo "-*) $(readlink -f ${0}) usage ${name} 1 "Invalid option \"'${1}'\"" <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 1;;"
+__debug_command() {
+	local -n _command=$1
+	local _opt
+
+	for _opt in ${_command[options]}; do
+		__debug_option ${ADS_OPT[${_opt%%|*}]}
+	done
 }
 
-__aeten_ads_man_section() {
-	eval "${1}=\"$(echo "${2}"|sed --quiet "s/^\\s*#\\s*$(echo "${1}"|tr '[:lower:]' '[:upper:]'):\\s*\\(.*\\)/\\1/p"|__aeten_ads_man_inline_style)\""
-}
+__debug_option() {
+	local -n _opt=$1
+	local _occurence _value
 
-__aeten_ads_debug_option() {
-	echo "$(${requiered} && echo '!')${option}|${short}$([ -z "${value}" ] || echo " ${value}"): ${description}" >&2
-}
-
-__aeten_ads_check_option() {
-	local _varname
-	if ${requiered}; then
-		_varname=${_var_prefix}$(echo ${option}|tr '[:lower:]' '[:upper:]'|tr - _)
-		echo "[ -z \${${_varname}+x} ] && { $(readlink -f ${0}) usage ${name} 1 "Option ${option} is requiered." <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 1; };"
+	if   ${_opt[requiered]} && ${_opt[multi]}; then _occurence=+
+	elif ${_opt[requiered]};                   then _occurence=!
+	elif ${_opt[multi]};                       then _occurence=*
+	else                                            _occurence=?
 	fi
-}
-
-__aeten_ads_parse_option() {
-	local _varname=${_var_prefix}$(echo ${option}|tr '[:lower:]' '[:upper:]'|tr - _)
-	if [ help = "${option}" ]; then
-		echo "-${short}|--${option}) $(readlink -f ${0}) help <<< '$(echo "${input}"|sed $"s/\$/\\\\x0/")'; exit 0;;"
-	elif [ -z "${value}" ]; then
-		echo "-${short}|--${option}) ${_varname}=true;;"
-	else
-		echo "-${short}|--${option}) [ -z "\$${_varname}" ] && ${_varname}=\"\${2}\" || ${_varname}+=(\"\${2}\"); shift;;"
-	echo;
+	if ((${#_opt[value]} > 0)); then
+		_value=\ ${_opt[value]}
 	fi
+
+	echo "${_occurence}${_opt[id]}|${_opt[alias]}${_value}: ${_opt[description]}" >&2
 }
 
-__aeten_ads_man_inline_style() {
-	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\\])?_([^_]+)_( )?/\1\\fI\2\\fR\3/g;s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
+__api() {
+	sed --quiet --regexp-extended 's/^([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
 }
 
-__aeten_ads_man_opt() {
-	local formated_value
-	if [ -n "${value}" ]; then
-		formated_value="\\ \\fI${value//[\/]/}"
-	fi
-	cat - << EOF
-.TP
-.B \\-${short}${formated_value}\\fR, \\fB\\-\\-${option}${formated_value}
-$(echo "${description}"|__aeten_ads_man_inline_style)
-EOF
+__is_api() {
+	test 1 -eq $(__api "${1}"|grep "^${2}$"|wc -l) 2>/dev/null
 }
 
-__aeten_ads_api() {
-	sed --quiet --regexp-extended 's/^aeten_ads_([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
-}
 
-__aeten_ads_is_api() {
-	test 1 -eq $(__aeten_ads_api "${1}"|grep "^${2}$"|wc -l) 2>/dev/null
-}
-
-aeten_ads_cmd=${1}
-if __aeten_ads_is_api ${0} ${aeten_ads_cmd}; then
-   shift
-   aeten_ads_${aeten_ads_cmd} "${@}"
-   exit $?
+cmd=${1}
+if __is_api ${0} ${cmd}; then
+	shift
+	__init
+	${cmd} ${@}
+	exit $?
 # Allows script content inclusion
-elif [ "$(basename $(readlink -f ${0}))" != 'ads' ]; then
-   exit 1
+elif [[ ${ADS} != ads ]]; then
+	exit 1
 fi
-
