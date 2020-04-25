@@ -56,6 +56,7 @@ init() {
 }
 
 usage() {
+	local _msg
 	while [ $# -ne 0 ]; do
 		case "$1" in
 			--)           shift; break;;
@@ -63,9 +64,15 @@ usage() {
 		esac
 		shift
 	done
+
+	if (( ${#@} > 0 )); then
+		_msg=$(echo "$@"|__filter_input|__man_inline_style)$'\n.SH Usage:'
+	else
+		_msg='.SH Usage: '
+	fi
 	groff -T utf8 -man <<-EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' 
 		.TH
-		.SH $(echo "$@"|__filter_input|__man_inline_style) Usage:
+		${_msg}
 		$(__synopsys)
 	EOF
 }
@@ -170,7 +177,7 @@ __parse_cmdline() {
 
 		shift
 	done
-	_command=${!_cmd}
+	local -n _command=${!_cmd}
 
 	for _id in ${ADS_CMDID[@]}; do
 		local -n _cmd=${ADS_CMD[${_id}]}
@@ -186,7 +193,7 @@ __parse_cmdline() {
 					_opt=false
 				fi
 				if declare -F "${_opt_hook}" &>/dev/null; then
-					${_opt_hook} ${!_opt}
+					${_opt_hook} ${!_opt} ${!_command}
 				fi
 			done
 		if declare -F "${_cmd_post_hook}" &>/dev/null; then
@@ -269,6 +276,7 @@ __post_init() {
 
 __opt_init() {
 	local -n _opt=$1
+	local -n _selected_cmd=$2
 	local _varname=${_opt[id]^^}
 	_varname=${ADS_OPT_PFX}${_varname//[.-]/_}
 	if (( ${#_opt} > 0 )); then
@@ -287,8 +295,9 @@ __opt_init() {
 				echo exit 1
 			} ;;
 		esac
-	elif ${_opt[requiered]}; then
-		echo "echo ${ADS_OPT_PFX,,}usage 'Option --${_opt[name]} is requiered.'"
+	elif [[ ${_opt[command]} == ${_selected_cmd[id]} ]] && ${_opt[requiered]}; then
+		usage "Option --${_opt[name]} is requiered." >&2
+		echo exit 1
 	fi
 }
 
@@ -329,9 +338,9 @@ __synopsys_man() {
 		fi
 	else
 		if ${_opt[requiered]}; then
-			printf '\\fB  -%s\\fR|\\fB--%s\n%s\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI ${_value}")"
+			printf '\\fB-%s\\fR|\\fB--%s %s\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI${_value}")"
 		else
-			printf '\\fR [\\fB-%s\\fR|\\fB--%s%s\\fR]\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI ${_value}")"
+			printf '\\fR[\\fB-%s\\fR|\\fB--%s%s\\fR]\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI${_value}")"
 		fi
 	fi
 }
@@ -409,7 +418,7 @@ __groff() {
 				for _id in ${_cmd[options]}; do
 					 __synopsys_man --no-standard ${ADS_OPT[${_id%%|*}]}
 				done
-				echo
+				echo $'\n.fi\n.'
 				echo "${_cmd[description]}"|__man_inline_style
 				for _id in ${_cmd[options]}; do
 					__man_opt ${ADS_OPT[${_id%%|*}]}
