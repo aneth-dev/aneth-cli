@@ -1,36 +1,42 @@
 #!/bin/bash
-
+NAME=$(basename $0)
 # Depends:
-# bin: bash cat cut sed(GNU) grep man groff
+# bin: bash cat sed(GNU) grep man groff
 # debian: bash coreutils grep man-db groff-base
+__init__() {
+	local _argc=$#
+	if ! ${ADS_INITILIZED:-false}; then
+		. <(__init <<-_EOF_
+				#NAME: ads
+				#TITLE: ADS Manual
+				#VERSION: 1.0
+				#RESUME: Auto documented script.
+				#DESCRIPTION: _ADS_ permit script using it to be self and automatically documented. This tool permit to generate code to initializing options command line and add a _help_ which generates one in the manpage format.
+				#AUTHOR: Thomas Pérennou <thomas.perennou@aeten.net>
+				#LICENCE: GLPv3
+				#COPYLEFT: Thomas Pérennou
+				@init !/doc: Initialize a shell script from _doc_. Read _doc_ A shell script must call it like _source <(${NAME} init [<args>] -- \$@ <<EOF […] EOF)_.
+				 	?prefix NAME: Prefixes all generated variables by _NAME\__ (note the underscore after _NAME_).
+				 	?posix: Select this option to generate POSIX shell code. Ddo not use associative array for parameters n the form of _param_=_value_.
+				@bash-completion executable: Generates Bash completion for an _executable_ supporting ${NAME}.
+				@document format(pdf|manpage|markdown|grofftty): Generates document on the standard output according to the given _format_.
+			_EOF_
+			init
+		)
+		declare -x ADS_INITILIZED=true
+		__init ${@:2}
+		_argc=$?
+		case ${ADS_DEBUG:-false} in
+			verbose|true) exec {stdoutbck}>&1 1>&2;;
+		esac
+		${@:1:1} ${@:${_argc}+2}
+	fi
+}
 
-if ! ${ADS_INITILIZED:-false}; then
-declare -x ADS_INITILIZED=true
-. <($0 init <<-_EOF_
-#NAME: ads
-#TITLE: ADS Manual
-#VERSION: 1.0
-#RESUME: Auto documented script.
-#DESCRIPTION: _ADS_ permit script using it to be self and automatically documented. This tool permit to generate code to initializing options command line and add a _help_ which generates one in the manpage format.
-#AUTHOR: Thomas Pérennou <thomas.perennou@aeten.net>
-#LICENCE: GLPv3
-#COPYLEFT: Thomas Pérennou
-?prefix NAME: Prefixes all generated variables by _NAME\__ (note the underscore after _NAME_).
-@init: Initialize a script. A shell script must call it like _. <(ads init - -- \${@} <<EOF […] EOF)_.
-@usage: Print script usage.
-@bash-complete: Generate Bash completion code.
-_EOF_
-)
-fi
-
-if ${ADS_DEBUG:-false}; then
-	exec 1>&2
-fi
 init() {
 	local _name _cmd _opt
 	local ADS_CMD_PFX=
 	local ADS_OPT_PFX=
-	local ADS_INPUT_FILE=/dev/stdin
 
 	while [ $# -ne 0 ]; do
 		case "$1" in
@@ -42,12 +48,16 @@ init() {
 		esac
 		shift
 	done
-	if [[ ${DEBUG} = yes ]]; then
-		for _cmd in ${ADS_CMDID[@]}; do
-			__debug_command ${ADS_CMD[${_cmd}]}
-		done
+	if ${ADS_INITILIZED:-false}; then
+		case ${ADS_DEBUG:-false} in
+			verbose) set -x;&
+			true)    for _cmd in ${ADS_CMDID[@]}; do
+			         	__debug_command ${ADS_CMD[${_cmd}]}
+			         done;;
+		esac
 	fi
 
+	declare -ga ADS_ARGV=($@)
 	__parse_cmdline \
 		--cmdline-pre-hook  __pre_init \
 		--cmdline-post-hook __post_init \
@@ -56,12 +66,14 @@ init() {
 		--cmd-error-hook    __cmd_error \
 		--opt-error-hook    __opt_error \
 		-- $@
+	return $?
 }
 
-usage() {
-	local _msg
+__usage() {
+	local _msg _cmd
 	while [ $# -ne 0 ]; do
 		case "$1" in
+			--command|-c) shift; _cmd=$1 ;;
 			--)           shift; break;;
 			 *)           break;;
 		esac
@@ -73,10 +85,10 @@ usage() {
 	else
 		_msg='.SH Usage: '
 	fi
-	groff -T utf8 -man <<-EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d' 
+	groff -Kutf8 -Tutf8 -man <<-EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d'
 		.TH
 		${_msg}
-		$(__synopsys)
+		$(__synopsys ${_cmd})
 	EOF
 }
 
@@ -103,7 +115,7 @@ bash-completion() {
 
 __parse_cmdline() {
 	local _cmdline_pre_hook _cmdline_post_hook _cmd_pre_hook _cmd_post_hook _opt_hook
-	local _argv _id _varname _cmdid _cmd _opt _command _found
+	local _i _argc _argv _id _varname _cmdid _cmd _opt _command _found
 
 	while [ $# -ne 0 ]; do
 		case "$1" in
@@ -119,6 +131,7 @@ __parse_cmdline() {
 		esac
 		shift
 	done
+	_argc=$#
 
 	if declare -F "${_cmdline_pre_hook}" &>/dev/null; then
 		${_cmdline_pre_hook}
@@ -126,6 +139,7 @@ __parse_cmdline() {
 	local -n _cmd=ADS_CMD_0
 	while [ $# -ne 0 ]; do
 		if [[ $1 = -- ]]; then
+			shift
 			break
 		fi
 		if [[ $1 =~ ^- ]]; then
@@ -152,7 +166,7 @@ __parse_cmdline() {
 				done
 			done
 			if ! $_found && declare -F "${_opt_error_hook}" &>/dev/null; then
-				${_opt_error_hook} $1
+				${_opt_error_hook} "${_cmdid}" "$1"
 			fi
 		else
 			# Command
@@ -160,12 +174,20 @@ __parse_cmdline() {
 			_varname=${ADS_CMD[${_id}]}
 			if declare -p "${_varname}" &>/dev/null; then
 				local -n _cmd=${ADS_CMD[${_id}]}
-				_cmd=true
 				_cmdid=${_id}
 				shift
+				if (( ${#_cmd[value]} == 0 ));then
+					_cmd=true
+				else
+					let _i=0
+					until [ $# -eq 0 ] || [[ $1 =~ ^-.$ ]] || [[ $1 =~ ^--[^-].*$ ]]; do
+						_cmd[0]+="\$'${1//\'/\\\'}' "
+						shift
+					done
+				fi
 				continue
 			elif declare -F "${_cmd_error_hook}" &>/dev/null; then
-				${_cmd_error_hook} ${_id}
+				${_cmd_error_hook} "${_id}"
 			fi
 		fi
 
@@ -175,9 +197,6 @@ __parse_cmdline() {
 
 	for _id in ${ADS_CMDID[@]}; do
 		local -n _cmd=${ADS_CMD[${_id}]}
-		if (( ${#_cmd} == 0 )); then
-			_cmd=false
-		fi
 		if declare -F "${_cmd_pre_hook}" &>/dev/null; then
 			${_cmd_pre_hook} ${!_cmd}
 		fi
@@ -195,13 +214,15 @@ __parse_cmdline() {
 		fi
 	done
 
+	let _argc=${_argc}-$#
 	if declare -F "${_cmdline_post_hook}" &>/dev/null; then
 		if declare -p "${!_command}" &>/dev/null; then
 			${_cmdline_post_hook} ${!_command}
 		else
-			${_cmdline_post_hook} ${ADS_CMD}
+			${_cmdline_post_hook} ${ADS_CMD} ${_argc}
 		fi
 	fi
+	return $_argc
 }
 
 __join() {
@@ -223,6 +244,7 @@ __pre_init() {
 		}
 
 		${ADS_CMD_PFX,,}usage() {
+			local _msg
 			local errno=1
 			while [ \$# -ne 0 ]; do
 				case "\$1" in
@@ -232,25 +254,123 @@ __pre_init() {
 				esac
 				shift
 			done
-			__ads_heredoc|$(readlink -f $0) usage -- ${ADS_NAME,,}: \$@ >/dev/\$( [ "\${errno}" = 0 ] && echo stdout || echo stderr)
+			__ads_heredoc|"\$0" __ads__ usage -- ${ADS_NAME,,}: \$@ >/dev/\$( [ "\${errno}" = 0 ] && echo stdout || echo stderr)
 			exit \${errno}
 		}
 	EOF
 }
 
 __cmd_init() {
-	if [[ $1 = ADS_CMD_0 ]]; then
-		return
-	fi 
-	local -n _cmd=$1
-	local _varname=${_cmd[id]^^}
-	echo "declare -g ${ADS_OPT_PFX}${_varname//[.-]/_}=${_cmd}"
+	true
+}
+
+__check_value() {
+	local _element_type=$1
+	local _element_id=$2
+	local _value=$3
+	local _constraint=$4
+
+	case ${_constraint} in
+		'') ;;
+		/*/) [[ -d $_v ]] || {
+			echo "Directory for ${_element_type} '${_element_id//./ }' must exists." >&2
+			echo exit 1
+			exit 0
+		} ;;
+		/*) [[ -r $_value ]] || {
+			echo "File for ${_element_type} '${_element_id//./ }' must exists and be readable." >&2
+			echo exit 1
+			exit 0
+		} ;;
+		*) [[ ${_value} =~ ^${_constraint}$ ]] || {
+			echo "Value for ${_element_type} '${_element_id//./ }' must match ^$_constraint$." >&2
+			echo exit 1
+			exit 0
+		} ;;
+	esac
 }
 
 __post_init() {
 	local -n _cmd=$1
+	local _shift=$2
+	local _k _v _key_name _key_constraint _value_name _value_constraint
 	local _varname=${_cmd[id]^^}
-	_varname=ADS_CMD_${_varname//[.-]/_}
+	if [[ ${!_cmd} == ADS_CMD_0 ]]; then
+		_varname=${ADS_OPT_PFX}_0
+	else
+		_varname=${ADS_OPT_PFX}${_varname//[.-]/_}
+	fi
+	eval local -a _value=($_cmd)
+
+	#                        key=value
+	#                        key(key constraint)=value(value constraint)
+	#                        1       2  3        4       5  6
+	if [[ ${_cmd[value]} =~ ^([^\(]*)(\((.+)\))?=([^\(]*)(\((.+)\))?$ ]]; then
+		_key_name=${BASH_REMATCH[1]}
+		_key_constraint=${BASH_REMATCH[3]}
+		_value_name=${BASH_REMATCH[4]}
+		_value_constraint=${BASH_REMATCH[6]}
+	#                          value
+	#                          value(value constraint)
+	#                          1      2   3
+	elif [[ ${_cmd[value]} =~ ^([^\(]+)(\((.+)\))?$ ]]; then
+		_value_name=${BASH_REMATCH[1]}
+		_value_constraint=${BASH_REMATCH[3]}
+	fi
+
+	if (( ${#_value} == 0 )) && (( ${#_key_name} == 0 )); then
+		case ${_cmd[value]} in
+			/*/) _value[0]=./ ;;
+			/*)  _value[0]=-;;
+		esac
+	fi
+
+	_cmd=
+	for _v in ${_value[@]}; do
+		if (( ${#_key_name} > 0 )); then # Associative array
+			_k=${_v%%=*}
+			_v=${_v#*=}
+			if (( ${#_key_constraint} > 0 )); then
+				__check_value "command '${_cmd[id]//./ }' parameter name" "${_key_name}" "$_k" "${_key_constraint}"
+			fi
+		fi
+		if [[ ${_v} =~ ^-$|^$ ]]; then
+			case ${_cmd[value]} in
+				/*/) ${_cmd[requiered]} || _v=./ ;;
+				/*)  ${_cmd[requiered]} && _v=/dev/stdin || _v=/dev/stdout ;;
+			esac
+		fi
+		if (( ${#_key_name} > 0 )); then # Associative array
+			_cmd[0]+="[\$'${_k//\'/\\\'}']=\$'${_v//\'/\\\'}' "
+		else
+			_cmd[0]+="\$'${_v//\'/\\\'}' "
+		fi
+		if (( ${#_value_constraint} > 0 )); then
+			__check_value "command '${_cmd[id]//./ }' parameter value" "${_value_name}" "$_v" "${_value_constraint}"
+		fi
+	done
+
+	if ${_cmd[multi]} && ${_cmd[requiered]} && (( ${#_value[@]} == 0 )); then
+		echo "There must be at least one value for command '${_cmd[id]//./ }'" >&2
+		echo exit 1
+		exit 0
+	elif ${_cmd[requiered]} && (( ${#_value[@]} == 0 )); then
+		echo "There must be a value for command '${_cmd[id]//./ }'" >&2
+		echo exit 1
+		exit 0
+	elif ! ${_cmd[multi]} && (( ${#_value[@]} > 1 )); then
+		echo "There must be only one value for command '${_cmd[id]//./ }'" >&2
+		echo exit 1
+		exit 0
+	fi
+
+	if (( ${#_key_name} > 0 )); then # Associative array
+		echo "declare -gA ${_varname}=(${_cmd})"
+	elif ${_cmd[multi]}; then
+		echo "declare -ga ${_varname}=(${_cmd})"
+	else
+		echo "declare -g ${_varname}=${_cmd}"
+	fi
 
 	if [[ ${_cmd[id]} == bash-complete ]] && [[ ${ADS_NAME} =~ ^(AETEN_)?ADS$ ]]; then
 		__add_command ads.bash-complete "Bash completion auto generation from _ADS_."
@@ -258,7 +378,10 @@ __post_init() {
 	if ${ADS_OPT_HELP:-false}; then
 		__help
 	else
-		echo "declare -g ADS_CMD=${_varname}"
+		cat - <<-EOF
+			declare -g ADS_CMD=${_cmd[id]}
+			shift $_argc
+		EOF
 	fi
 }
 
@@ -284,22 +407,26 @@ __opt_init() {
 			} ;;
 		esac
 	elif [[ ${_opt[command]} == ${_selected_cmd[id]} ]] && ${_opt[requiered]}; then
-		usage "Option --${_opt[name]} is requiered." >&2
+		__usage --command ${_selected_cmd[id]} "Option --${_opt[name]} is requiered." >&2
 		echo exit 1
 	fi
 }
 
 __cmd_error() {
+	local _cmd=${ADS_CMD_0[name]}.$1
+	local _out=/proc/$(ps -p $PPID -o ppid=)/fd/1 # Grandpa
+	_out=${_out// /}
+	_cmd=${_cmd%.*}
 	case $1 in
-		bash-completion)
-			cat - <<-EOF
-				__ads_heredoc|$(readlink -f $0) bash-completion $@
-				exit 0
-			EOF
-			exit 0
-		;;
+		__ads__) _cmdid=$1;;
+		__ads__.usage)    echo exit 0; __usage ${ADS_ARGV[@]:2} >${_out};;
+		__ads__.grofftty) echo exit 0; __groff | groff -Kutf8 -Tutf8 -man - >${_out};;
+		__ads__.pdf)      echo exit 0; __groff | groff -Kutf8 -Tpdf -man - >${_out};;
+		__ads__.man)      echo exit 0; __groff >${_out};;
+		__ads__.markdown) echo exit 0; __groff | preconv -eutf8 | pandoc -f man -t commonmark | sed 's/\\\\f[IR]/_/g' >${_out};;
+		__ads__.bash-completion) echo exit 0; __ads_heredoc|bash-completion;;
 		*)
-			usage "${ADS_CMD_0[name]}: \"${1//./ }\" is not a ${ADS_CMD_0[name]} command. See '${ADS_CMD_0[name]} --help'." >&2
+			__usage --command "${1%.*}\..*" "${ADS_CMD_0[name]}: '${1##*.}' is not a '${_cmd//./ }' command. See '${ADS_CMD_0[name]} --help'." >&2
 			echo exit 1
 			exit 0
 		;;
@@ -307,7 +434,8 @@ __cmd_error() {
 }
 
 __opt_error() {
-	usage "${ADS_CMD_0[name]}: $1 is not a ${ADS_CMD_0[name]} option. See '${ADS_CMD_0[name]} --help'." >&2
+	local _cmd=$1 _opt=$2
+	__usage --command "${_cmd}(\..*)?" "${ADS_CMD_0[name]}: '${_opt}' is not a ${ADS_CMD_0[name]} ${_cmd//./ } option. See '${ADS_CMD_0[name]} --help'." >&2
 	echo exit 1
 	exit 0
 }
@@ -320,22 +448,34 @@ __synopsys_man() {
 	fi
 	local -n _opt=$1
 	_value=${_opt[value]}
+	#                        key=value
+	#                        key(key constraint)=value(value constraint)
+	#                        1       2  3        4       5  6
+	if [[ ${_opt[value]} =~ ^([^\(]*)(\((.*)\))?=([^\(]*)(\((.*)\))?$ ]]; then
+		_value=${BASH_REMATCH[1]}=${BASH_REMATCH[4]}
+	#                          value
+	#                          value(value constraint)
+	#                          1      2  3
+	elif [[ ${_opt[value]} =~ ^([^(]+)(\(([^)]+)\))?$ ]]; then
+		_value=${BASH_REMATCH[1]}
+	fi
+
 	_value=${_value#/}
 	_value=${_value#\!/}
 	_value=${_value%/}
-	if ${_standard}; then
+#	if ${_standard}; then
+#		if ${_opt[requiered]}; then
+#			printf '.B -%s\\fR|\\fB--%s\n%s\n' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo ".I ${_value}")"
+#		else
+#			printf '.OP \-%s\\fR|\\fB--%s%s\n' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " ${_value}")"
+#		fi
+#	else
 		if ${_opt[requiered]}; then
-			printf '.B -%s\\fR|\\fB--%s\n%s\n' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo ".I ${_value}")"
+			printf '\\fB-%s\\fR|\\fB--%s %s\\fR\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI${_value}")"
 		else
-			printf '.OP \-%s\\fR|\\fB--%s%s\n' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " ${_value}")"
+			printf '\\fR[\\fB-%s\\fR|\\fB--%s\\fR%s\\fR]\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI${_value}")"
 		fi
-	else
-		if ${_opt[requiered]}; then
-			printf '\\fB-%s\\fR|\\fB--%s %s\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI${_value}")"
-		else
-			printf '\\fR[\\fB-%s\\fR|\\fB--%s%s\\fR]\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\fI${_value}")"
-		fi
-	fi
+#	fi
 }
 
 __man_opt() {
@@ -351,14 +491,14 @@ __man_opt() {
 	fi
 	cat - <<-EOF
 		.TP
-		.B \\-\\-${_opt[name]}${formated_value}\\fR, \\fB\\-\\-${_opt[alias]}${formated_value} \\\fR
-		 $(echo "${_opt[description]}"|__man_inline_style)
+		\\fB\\-\\-${_opt[name]}\\fR${formated_value}\\fR, \\fB\\-${_opt[alias]}\\fR ${formated_value}
+		\\fR$(echo "${_opt[description]}"|__man_inline_style)
 		.sp
 	EOF
 }
 
 __man_inline_style() {
-	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\]?)_([^_]+)_( )?/\1\\fI\2\\fR\3/g;s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
+	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\]?)_([^_]+)_( )?/\1\\fI\2\\fR\3/g;s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/ /\\[u00A0]/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
 }
 
 __help() {
@@ -367,24 +507,51 @@ __help() {
 }
 
 __synopsys() {
-	local _id
+	local _id _value _cmdid=$1
 	echo ".SY ${ADS_CMD_0[name]}"
 	for _id in ${ADS_CMD_0[options]}; do
 		__synopsys_man ${ADS_OPT[${_id%%|*}]}
 	done
 	if (( ${#ADS_CMDID[@]} > 1 )); then
-		echo "<_command_> [<_args_>]"|__man_inline_style
+		echo -n "\\fIcommand\\fR [\\fIargs\\fR]"
 		for _id in ${ADS_CMDID[@]:1}; do
+			if (( ${#_cmdid} > 0 )) && [[ ! ${_id} =~ ^${_cmdid}$ ]]; then
+				continue
+			fi
 			local -n _cmd=${ADS_CMD[${_id}]}
-			echo ".SY ${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ }"
+			if [[ ${_cmd[description]} =~ ^\ *-\ *$ ]]; then
+				continue
+			fi
+			echo -n $'\n'".SY ${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ }"
+			if (( ${#_cmd[options]} > 0 )) || (( ${#_cmd[value]} > 0 )); then
+				echo
+			fi
 			for _id in ${_cmd[options]}; do
 				__synopsys_man ${ADS_OPT[${_id%%|*}]}
 			done
+			#                        key=value
+			#                        key(key constraint)=value(value constraint)
+			#                        1      2  3        4      5  6
+			if [[ ${_cmd[value]} =~ ^([^\(]*)(\((.*)\))?=([^\(]*)(\((.*)\))?$ ]]; then
+				_value=${BASH_REMATCH[4]#/}
+				_value=${_value#\!/}
+				_value=${_value%/}
+				echo -n "\\fI${BASH_REMATCH[1]}\\fR=\\fI${_value}\\fR"
+			#                          value
+			#                          value(value constraint)
+			#                          1      2  3
+			elif [[ ${_cmd[value]} =~ ^([^(]+)(\(([^)]+)\))?$ ]]; then
+				_value=${BASH_REMATCH[1]#/}
+				_value=${_value#\!/}
+				_value=${_value%/}
+				echo -n "\\fI${_value}\\fR"
+			fi
 		done
 	fi
 }
 
 __groff() {
+	local _cmd _id _value
 	cat - <<-EOF
 		.TH ${ADS_CMD_0[name]^^} 1 "$(date +%D)" "${ADS_CMD_0[name]^^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[title]}"
 		.ie \n(.g .ds Aq \(aq
@@ -401,17 +568,56 @@ __groff() {
 		.fi
 		.sp
 		.SH DESCRIPTION
-		$(echo "${_cmd[description]}"|__man_inline_style)
+		$(echo "${ADS_CMD_0[description]}"|__man_inline_style)
 		.sp
 		$(if (( ${#ADS_CMDID[@]} > 1 )); then
 			echo -e '.SH COMMANDS\n.'
 			for _id in ${ADS_CMDID[@]:1}; do
 				local -n _cmd=${ADS_CMD[${_id}]}
+				if [[ ${_cmd[description]} =~ ^\ *-\ *$ ]]; then
+					continue
+				fi
 				echo -en ".SS \\\fB ${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ } "
 				for _id in ${_cmd[options]}; do
 					 __synopsys_man --no-standard ${ADS_OPT[${_id%%|*}]}
 				done
+				#                        key=value
+				#                        key(key constraint)=value(value constraint)
+				#                        1      2  3        4       5  6
+				if [[ ${_cmd[value]} =~ ^([^\(]*)(\((.*)\))?=([^\(]*)(\((.*)\))?$ ]]; then
+					echo "\\fI${BASH_REMATCH[1]}\\fR=\\fI${BASH_REMATCH[4]}\\fR"
+				#                          value
+				#                          value(value constraint)
+				#                          1      2  3
+				elif [[ ${_cmd[value]} =~ ^([^(]+)(\(([^)]+)\))?$ ]]; then
+					_value=${BASH_REMATCH[1]#/}
+					_value=${_value#\!/}
+					_value=${_value%/}
+					echo "\\fI${_value}\\fR"
+				fi
 				echo $'\n.fi\n.'
+				#                        key=value
+				#                        key(key constraint)=value(value constraint)
+				#                        1       2  3        4       5  6
+				if [[ ${_cmd[value]} =~ ^([^\(]*)(\((.*)\))?=([^\(]*)(\((.*)\))?$ ]]; then
+					if (( ${#BASH_REMATCH[3]} > 0 )); then
+						echo "\\fI${BASH_REMATCH[1]}\\fR = ${BASH_REMATCH[3]}"
+						echo $'\n.fi\n.'
+					fi
+					if (( ${#BASH_REMATCH[6]} > 0 )); then
+						echo "\\fI${BASH_REMATCH[4]}\\fR = ${BASH_REMATCH[6]}"
+						echo $'\n.fi\n.'
+					fi
+				#                          value
+				#                          value(value constraint)
+				#                          1      2  3
+				elif [[ ${_cmd[value]} =~ ^([^(]+)(\(([^)]+)\))?$ ]]; then
+					if (( ${#BASH_REMATCH[3]} > 0 )); then
+						echo $'\n.fi\n.'
+						echo "\\fI${BASH_REMATCH[1]}\\fR = ${BASH_REMATCH[3]}"
+						echo $'\n.fi\n.'
+					fi
+				fi
 				echo "${_cmd[description]}"|__man_inline_style
 				for _id in ${_cmd[options]}; do
 					__man_opt ${ADS_OPT[${_id%%|*}]}
@@ -424,6 +630,7 @@ __groff() {
 		$(for _id in ${ADS_CMD_0[options]}; do
 			__man_opt ${ADS_OPT[${_id%%|*}]}
 		done)
+		$(test -n "${_cmd[author]}" && { echo .sp; echo .SH AUTHOR; echo "${_cmd[author]}"; })
 		$(test -n "${_cmd[authors]}" && { echo .sp; echo .SH AUTHORS; echo "${_cmd[authors]}"; })
 		$(test -n "${_cmd[copyright]}" && { echo .sp; echo .SH COPYRIGHT; echo "© ${_cmd[copyright]}"; })
 		$(test -n "${_cmd[copyleft]}" && { echo .sp; echo .SH COPYLEFT; echo "🄯 ${_cmd[copyleft]}"; })
@@ -446,20 +653,20 @@ __bash_completion_option() {
 	local -n _opt=$1
 	${_opt[multi]} && return;
 	cat - <<-EOF
-			"-${_opt[alias]%%|*} "|"--${_opt[name]} ")
-				completion=\${completion/--${_opt[name]} /}
+		"-${_opt[alias]%%|*} "|"--${_opt[name]} ")
+			completion=\${completion/--${_opt[name]} /}
 	EOF
 	if [ -z "${_opt[value]}" ]; then
 		cat - <<-EOF
-				options+=${_opt[alias]%%|*}
+			options+=${_opt[alias]%%|*}
 		EOF
 	else
 		cat - <<-EOF
-				[ -n \"\${COMP_WORDS[\$i + 1]}\" ] && options+=${_opt[alias]%%|*}
+			[ -n \"\${COMP_WORDS[\$i + 1]}\" ] && options+=${_opt[alias]%%|*}
 		EOF
 	fi
 	cat - <<-EOF
-				;;
+		;;
 	EOF
 }
 
@@ -467,9 +674,9 @@ __bash_completion_command() {
 	local -n _cmd=$1
 	${_opt[multi]} && return;
 	cat - <<-EOF
-			"${_cmd[name]} ")
-				completion=\${completion/${_cmd[name]} /}
-				;;
+		"${_cmd[name]} ")
+			completion=\${completion/${_cmd[name]} /}
+			;;
 	EOF
 }
 
@@ -486,6 +693,9 @@ __add_command() {
 		[0]=
 		[id]=${_id}
 		[name]=${_name}
+		[value]=
+		[requiered]=false
+		[multi]=false
 		[description]=${_description}
 		[options]=
 	)
@@ -524,7 +734,8 @@ __filter_input() {
 }
 
 __init() {
-	local _opt _option_level _option_command _command _option _COMMAND _OPTION _option2 _OPTION2 _requiered _multi _occurence _name _alias _ads_name
+	local _argc=$#
+	local  _opt _option_level _option_command _command _option _COMMAND _OPTION _option2 _OPTION2 _requiered _multi _occurence _name _alias _ads_name
 	local -n _cmd
 	local _spaces=$'[ \t]'
 	local -i _level=0
@@ -545,19 +756,23 @@ __init() {
 	else
 		_name=${ADS}
 	fi
+
 	declare -gr ADS_CALLER=${_name}
 	_name=${_name^^}
 	_name=${_name//[. ]/_}
 
 	declare -gr ADS_NAME=${_name//-/_}
-	declare -gr ADS_INPUT=$(__filter_input ${ADS_INPUT_FILE:-/dev/stdin})
+	declare -gr ADS_INPUT=$(sed 's/^ \+//' ${ADS_INPUT_FILE:-/dev/stdin}|__filter_input)
 	declare -gA ADS_OPT
 	declare -ga ADS_CMDID=(0)
 	declare -gA ADS_CMD=([${ADS_CMDID}]=ADS_CMD_0)
 	declare -gA ADS_CMD_0=(
 		[0]=
 		[id]=
-		[name]=${ADS_NAME,,}
+		[name]="${ADS_CALLER}"
+		[value]=
+		[requiered]=false
+		[multi]=false
 		[description]=
 		[options]=
 	)
@@ -574,7 +789,7 @@ __init() {
 		fi
 		if [[ ${_opt} =~ ^#([a-zA-Z0-9-]+)${_spaces}*:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
 			ADS_CMD_0[${BASH_REMATCH[1],,}]=${BASH_REMATCH[3]}
-		elif [[ ${_opt} =~ ^($'\t'{$_option_level})@([a-zA-Z0-9-]+):(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+		elif [[ ${_opt} =~ ^($'\t'{$_option_level})@([a-zA-Z0-9-]+)(${_spaces}+([!+*?]?)([][()=|_/a-zA-Z0-9.+*!?\\^\$-]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
 			if ((${_option_level} == 0)); then
 				_option_command=${BASH_REMATCH[2]}
 			elif ((${_option_level} > ${_level})); then
@@ -589,7 +804,14 @@ __init() {
 			fi
 			_level=${_option_level}
 			_command=${_option_command}
-			_description=${BASH_REMATCH[4]}
+			_description=${BASH_REMATCH[7]}
+			_occurence=${BASH_REMATCH[4]}
+			case "${_occurence}" in
+				''|'?') _requiered=false; _multi=false;;
+				   '*') _requiered=false; _multi=true;;
+				   '+') _requiered=true;  _multi=true;;
+				   '!') _requiered=true;  _multi=false;;
+			esac
 			_COMMAND=ADS_CMD_${_command^^}
 			_COMMAND=${_COMMAND//[.-]/_}
 			ADS_CMDID+=(${_command})
@@ -599,7 +821,10 @@ __init() {
 			_CMD=(
 				[id]=${_command}
 				[name]=${BASH_REMATCH[2]}
-				[description]=${BASH_REMATCH[4]}
+				[value]=${BASH_REMATCH[5]}
+				[requiered]=${_requiered}
+				[multi]=${_multi}
+				[description]=${BASH_REMATCH[7]}
 				[options]=
 			)
 		elif (( ${_option_level} == 0 )); then
@@ -618,7 +843,7 @@ __init() {
 			done
 			let _level--
 		fi
-		if [[ ${_opt} =~ ^${_spaces}*([!+*?]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(${_spaces}+([!:|@_/a-zA-Z0-9]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+		if [[ ${_opt} =~ ^${_spaces}*([!+*?]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(${_spaces}+([!:|@_/a-zA-Z0-9-]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
 			_option=$(__join . ${_command} ${BASH_REMATCH[2]})
 			_OPTION=${_option^^}
 			_OPTION=ADS_OPT_${_OPTION//[.-]/_}
@@ -664,6 +889,8 @@ __init() {
 			fi
 		fi
 	done
+	let _argc-=$#
+	return $_argc
 }
 
 __bash_completion_value() {
@@ -707,8 +934,17 @@ __bash_completion_value() {
 
 __debug_command() {
 	local -n _command=$1
-	local _opt
+	local _opt _occurence _value
 
+	if (( ${#_command[value]} > 0 )); then
+		if   ${_command[requiered]} && ${_opt[multi]}; then _occurence=+
+		elif ${_command[requiered]};                   then _occurence=!
+		elif ${_command[multi]};                       then _occurence=*
+		else                                                _occurence=?
+		fi
+		_value=" ${_occurence}${_command[value]}"
+	fi
+	echo "${_command[id]}${_value}: ${_command[description]}" >&2
 	for _opt in ${_command[options]}; do
 		__debug_option ${ADS_OPT[${_opt%%|*}]}
 	done
@@ -738,14 +974,4 @@ __is_api() {
 	test 1 -eq $(__api "${1}"|grep "^${2}$"|wc -l) 2>/dev/null
 }
 
-
-cmd=${1}
-if __is_api ${0} ${cmd}; then
-	shift
-	__init
-	${cmd} ${@}
-	exit $?
-# Allows script content inclusion
-elif [[ ${ADS} != ads ]]; then
-	exit 1
-fi
+__init__ $@
