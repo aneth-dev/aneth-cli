@@ -512,6 +512,7 @@ aeten_cli_unterm() {
 		while (match(\$0, /([^\\r]*)\\r([^\\r]*)(.*)/, group)) {
 			\$0 = group[2] substr(\$0, length(group[2])+((length(group[1]) == 0)? 0: 1), length(group[1])-length(group[2])) group[3];
 		};
+		gsub(/\\\[][]/,\"\");
 		print;
 		${unbuffered}
 	}"
