@@ -6,7 +6,7 @@
 NAME=$(basename $0)
 
 declare -A I18N_en
-for _ in name synopsys description command{,s} option{,s} author{,s} copyright copyleft licen{c,s}e; do
+for _ in name synopsis description command{,s} option{,s} author{,s} copyright copyleft licen{c,s}e; do
 	I18N_en[$_]=$_
 done
 I18N_en[colon]=': '
@@ -14,7 +14,7 @@ I18N_en[semicolon]='; '
 
 declare -A I18N_fr=(
 [name]=nom
-[synopsys]=synopsys
+[synopsis]=synopsis
 [description]=description
 [commands]=commandes
 [options]=options
@@ -40,6 +40,11 @@ __init__() {
 			 	?prefix NAME: Prefixes all generated variables by _NAME\__ (note the underscore after _NAME_).
 			 	?posix|P: Select this option to generate POSIX shell code. Do not use associative array for parameters in the form of _param_=_value_.
 			 	?writable: Unlock write variables protection.
+
+			 	?left-header-logo /logo: Logo to use at left header for PDF manual.
+			 	?center-header-logo /logo: Logo to use at center header for PDF manual.
+			 	?right-header-logo /logo: Logo to use at right header for PDF manual.
+			 	?section-fg rgb: Defines foreground color for sections. The format must be in hexadecimal RGB like #A1234B.
 			@bash-completion executable: Generates Bash completion for an _executable_ supporting ${NAME}.
 			@manual executable: Generates document on the standard output according to the given _format_ option.
 			 	?format pdf|manpage|man|markdown|md|grofftty: Document generation _format_.
@@ -290,7 +295,6 @@ __add_help() {
 }
 
 __help() {
-#	__groff|man -l - >&2
 	__groff|man -l - >&2
 	echo exit 0
 }
@@ -314,7 +318,7 @@ __usage() {
 	groff -Kutf8 -Tutf8 -man <<-EOF | sed '/^\s*$/d;/\s*()/d;/()\s*()/d'
 		.TH
 		${_msg}
-		$(__synopsys ${_cmd})
+		$(__groff_synopsis ${_cmd})
 	EOF
 }
 
@@ -681,7 +685,7 @@ __cmd_error() {
 		__ads__) _cmdid=$1;;
 		__ads__.usage)    echo exit 0; __usage ${ADS_ARGV[@]:2}; exit $?;;
 		__ads__.grofftty) echo exit 0; __groff | groff -Kutf8 -Tutf8 -man - >${ADS_ARGV[2]}; exit $?;;
-		__ads__.pdf)      echo exit 0; __groff | groff -Kutf8 -Tpdf -man - >${ADS_ARGV[2]}; exit $?;;
+		__ads__.pdf)      echo exit 0; __groff true | groff -Kutf8  -dpaper=a4 -P-pa4 -Tpdf -t -man - >${ADS_ARGV[2]}; exit $?;;
 		__ads__.manpage)  ;&
 		__ads__.man)      echo exit 0; __groff >${ADS_ARGV[2]}; exit $?;;
 		__ads__.markdown) ;&
@@ -705,36 +709,67 @@ __opt_error() {
 
 # {{{ groff
 __groff() {
+	local _pdf=$1
 	local _cmd _id _value
+	local _has_header_logo
+
+	if [[ ${_pdf} = true ]]; then
+		cat - <<-EOF
+			.
+			.fam H
+			.
+			.nr PO 2c
+			.nr IN 1c
+			.nr SN 0.5c
+			.nr LL 17c
+			.nr LT 17c
+			.po 2c
+			.
+			.TH "${ADS_CMD_0[name]^^}" 1 "$(date +%D)" "${ADS_CMD_0[name]^^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[title]}"
+			.de1 PT
+			.	fam H
+			$(if [[ -n ${INIT_LEFT_HEADER_LOGO} ]] || [[ -n ${INIT_CENTER_HEADER_LOGO} ]] || [[ -n ${INIT_RIGHT_HEADER_LOGO} ]]; then
+				cat - <<-LOGO_EOF
+					.	sp |0
+					$([[ -n ${INIT_LEFT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_LEFT_HEADER_LOGO} -L 0 1.2c'" || echo .)
+					$([[ -n ${INIT_CENTER_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_CENTER_HEADER_LOGO} -C 0 1.2c 21c'" || echo .)
+					$([[ -n ${INIT_RIGHT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_RIGHT_HEADER_LOGO} -R 0 1.2c 19c'" || echo .)
+					.	sp |1.6c
+				LOGO_EOF
+			fi)
+			.	tl '\\\\*[an-title](\\\\*[an-section])'\\\\*[an-extra3]'\\\\*[an-title](\\\\*[an-section])'
+			..
+			.
+			.color 1
+		EOF
+	else
+		cat - <<-EOF
+			.TH "${ADS_CMD_0[name]^^}" 1 "$(date +%D)" "${ADS_CMD_0[name]^^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[title]}"
+		EOF
+	fi
 	cat - <<-EOF
-		.fam H
-		.TH \\fH${ADS_CMD_0[name]^^} 1 "$(date +%D)" "\\fH${ADS_CMD_0[name]^^} ${ADS_CMD_0[version]}" "\\f[H]${ADS_CMD_0[title]}"
-		.ie \n(.g .ds Aq \(aq
-		.el       .ds Aq '
-		.nh
-		.ad l
-		.SH ${I18N[name]^^}
+		.defcolor section rgb ${INIT_SECTION_FG:=#000000}
+		$(__groff_section ${I18N[name]})
 		.NH 1 ${ADS_CMD_0[name]}
 		.PP
 		${ADS_CMD_0[name]} - $(echo "${ADS_CMD_0[resume]}"|__groff_inline_style)
-		.SH ${I18N[synopsys]^^}
+		$(__groff_section ${I18N[synopsis]})
 		.
-		$(__groff_synopsys)
+		$(__groff_synopsis)
 		.fi
-		.sp
-		.SH ${I18N[description]^^}
+		$(__groff_section ${I18N[description]})
 		$(echo "${ADS_CMD_0[description]}"|__groff_inline_style)
-		.sp
 		$(if (( ${#ADS_CMDID[@]} > 1 )); then
-			echo ".SH ${I18N[commands]^^}"
+			__groff_section ${I18N[commands]}
 			for _id in ${ADS_CMDID[@]:1}; do
 				local -n _cmd=${ADS_CMD[${_id}]}
 				if [[ ${_cmd[description]} =~ ^\ *-\ *$ ]]; then
 					continue
 				fi
-				echo -en ".SS \\\fB ${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ } "
+				echo .ns
+				echo -n ".SS \fB${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ } "
 				for _id in ${_cmd[options]}; do
-					 __groff_synopsys_opt ${ADS_OPT[${_id%%|*}]}
+					 __groff_synopsis_opt ${ADS_OPT[${_id%%|*}]}
 				done
 				#                        key=value
 				#                        key(key constraint)=value(value constraint)
@@ -773,6 +808,7 @@ __groff() {
 						echo $'\n.fi\n.'
 					fi
 				fi
+				[ "${_pdf}" = true ] && echo .sp -0.6v
 				echo "${_cmd[description]}"|__groff_inline_style
 				for _id in ${_cmd[options]}; do
 					__groff_opt ${ADS_OPT[${_id%%|*}]}
@@ -782,8 +818,8 @@ __groff() {
 			done
 			echo .sp
 		fi)
-		.sp -1
-		.SH ${I18N[options]^^}
+		.sp -2
+		$(__groff_section ${I18N[options]})
 		$(for _id in ${ADS_CMD_0[options]}; do
 			__groff_opt ${ADS_OPT[${_id%%|*}]}
 			echo .sp -1
@@ -791,9 +827,8 @@ __groff() {
 		$(for _id in author authors copyright copyleft licence license; do
 			[[ -z ${ADS_CMD_0[$_id]} ]] && continue
 			cat -<<-_EOF_
-				.sp
-				.SH ${I18N[${_id}]^^}
-				${ADS_CMD_0[$_id]}
+				$(__groff_section ${I18N[${_id}]})
+				$(echo "${ADS_CMD_0[$_id]}" | __groff_inline_style)
 			_EOF_
 		done)
 	EOF
@@ -803,7 +838,22 @@ __groff_inline_style() {
 	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\]?)_([^_]+)_( )?/\1\\fI\2\\fR\3/g;s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/ /\\[u00A0]/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
 }
 
-__groff_synopsys() {
+__groff_section() {
+	if [[ ${_pdf} = true ]]; then
+		cat <<-EOF
+			.rs
+			.sp
+			.SH \s+3\m[section]${*^}\m[]
+			.rs
+			.sp 0.15v
+			.ns
+		EOF
+	else
+		echo ".SH ${*^^}"
+	fi
+}
+
+__groff_synopsis() {
 	local _id _value _command _cmdid=$1
 	cat -<<-EOF
 		.SY \\f[B]${ADS_CMD_0[name]}\\f[R]
@@ -814,7 +864,7 @@ __groff_synopsys() {
 	EOF
 	for _id in ${ADS_CMD_0[options]}; do
 		[[ ${_id%%|*} = help ]] && continue
-		__groff_synopsys_opt ${ADS_OPT[${_id%%|*}]}
+		__groff_synopsis_opt ${ADS_OPT[${_id%%|*}]}
 	done
 	if (( ${#ADS_CMDID[@]} > 1 )); then
 		echo -n "\\f[I]${I18N[command]}\\f[R] [\\f[I]args\\f[R]]"
@@ -833,7 +883,7 @@ __groff_synopsys() {
 				echo
 			fi
 			for _id in ${_cmd[options]}; do
-				__groff_synopsys_opt ${ADS_OPT[${_id%%|*}]}
+				__groff_synopsis_opt ${ADS_OPT[${_id%%|*}]}
 			done
 			#                        key=value
 			#                        key(key constraint)=value(value constraint)
@@ -875,7 +925,7 @@ __groff_opt() {
 	EOF
 }
 
-__groff_synopsys_opt() {
+__groff_synopsis_opt() {
 	local _value
 	local -n _opt=$1
 	_value=${_opt[value]}
@@ -932,9 +982,9 @@ __markdown() {
 		## ${I18N[name]}
 		${ADS_CMD_0[name]} - ${ADS_CMD_0[resume]}
 
-		##  ${I18N[synopsys]}
+		##  ${I18N[synopsis]}
 
-		$(__markdown_synopsys)
+		$(__markdown_synopsis)
 
 		## Description
 		${ADS_CMD_0[description]}
@@ -948,7 +998,7 @@ __markdown() {
 				fi
 				echo -n "### **${ADS_CMD_0[name]} ${_cmd[id]//./\\ }** "
 				for _id in ${_cmd[options]}; do
-					 __markdown_synopsys_opt ${ADS_OPT[${_id%%|*}]}
+					 __markdown_synopsis_opt ${ADS_OPT[${_id%%|*}]}
 				done
 				#                        key=value
 				#                        key(key constraint)=value(value constraint)
@@ -1008,11 +1058,11 @@ __markdown() {
 	EOF
 }
 
-__markdown_synopsys() {
+__markdown_synopsis() {
 	local _id _value _command _cmdid=$1
 	echo -n " - **${ADS_CMD_0[name]}** "
 	for _id in ${ADS_CMD_0[options]}; do
-		__markdown_synopsys_opt ${ADS_OPT[${_id%%|*}]}
+		__markdown_synopsis_opt ${ADS_OPT[${_id%%|*}]}
 	done
 	if (( ${#ADS_CMDID[@]} > 1 )); then
 		echo -n "_command_ [_args_]"
@@ -1027,7 +1077,7 @@ __markdown_synopsys() {
 			_command="${ADS_CMD_0[name]} ${_cmd[id]//./ }"
 			echo -n $'\n'" - **${_command}**"
 			for _id in ${_cmd[options]}; do
-				__markdown_synopsys_opt ${ADS_OPT[${_id%%|*}]}
+				__markdown_synopsis_opt ${ADS_OPT[${_id%%|*}]}
 			done
 			#                        key=value
 			#                        key(key constraint)=value(value constraint)
@@ -1050,7 +1100,7 @@ __markdown_synopsys() {
 	fi
 }
 
-__markdown_synopsys_opt() {
+__markdown_synopsis_opt() {
 	local _value
 	local -n _opt=$1
 	_value=${_opt[value]}
