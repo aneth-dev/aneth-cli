@@ -4,15 +4,16 @@
 # debian: bash coreutils grep man-db groff-base
 
 NAME=$(basename $0)
-
+declare -gr KEYS=$(echo lang title version reference keywords resume description author{,s} copyright copyleft licen{c,s}e)
 declare -A I18N_en
-for _ in name synopsis description command{,s} option{,s} author{,s} copyright copyleft licen{c,s}e; do
+for _ in ${KEYS} manual name synopsis command{,s} option{,s}; do
 	I18N_en[$_]=$_
 done
 I18N_en[colon]=': '
 I18N_en[semicolon]='; '
 
 declare -A I18N_fr=(
+[manual]=manuel
 [name]=nom
 [synopsis]=synopsis
 [description]=description
@@ -41,14 +42,21 @@ __init__() {
 			 	?posix|P: Select this option to generate POSIX shell code. Do not use associative array for parameters in the form of _param_=_value_.
 			 	?writable: Unlock write variables protection.
 
-			 	?left-header-logo /logo: Logo to use at left header for PDF manual.
-			 	?center-header-logo /logo: Logo to use at center header for PDF manual.
-			 	?right-header-logo /logo: Logo to use at right header for PDF manual.
-			 	?section-fg rgb: Defines foreground color for sections. The format must be in hexadecimal RGB like #A1234B.
+			 	?left-header-logo| /logo: Logo to use at left header for PDF manual.
+			 	?right-header-logo| /logo: Logo to use at right header for PDF manual.
+			 	?center-header-logo| /logo: Logo to use at center header for PDF manual.
+			 	?first-page-header| /image: Image to use as header of the first page for PDF manual.
+			 	?style-section| none|highlight|underline: Defines the style of the titles of sections.
+			 	?style-subsection| none|highlight|underline: Defines the style of the titles of sections.
+			 	?primary-color| rgb: Primary color. Can retrieved from _first-page-header_ with Image Magik's _covert_ command. See colors section below.
+			 	?secondary-color| rgb: Secondary color. See colors section below.
+			 	?banner-header|B: Highlights header with _primary color_.
+			 	?perseved-color|: Using persived luminance instead of linear RGB algorithm.
 			@bash-completion executable: Generates Bash completion for an _executable_ supporting ${NAME}.
 			@manual executable: Generates document on the standard output according to the given _format_ option.
 			 	?format pdf|manpage|man|markdown|md|grofftty: Document generation _format_.
 			 	?output /file: Output _file_ destination. The default is the name of executable with the appropriate extension in the current directory.
+		#COLORS: The format must be in hexadecimal RGB like `#A1234B`.
 		_EOF_
 	)
 	${ADS} $@
@@ -107,7 +115,7 @@ init() {
 		else # Should not occure
 			continue
 		fi
-		if [[ ${_opt} =~ ^#([a-zA-Z0-9-]+)${_spaces}*:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+		if [[ ${_opt} =~ ^#([a-zA-Z0-9 -]+)${_spaces}*:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
 			ADS_CMD_0[${BASH_REMATCH[1],,}]=${BASH_REMATCH[3]}
 		elif [[ ${_opt} =~ ^($'\t'{$_option_level})@([a-zA-Z0-9-]+)(${_spaces}+([!+*?]?)([][()=|_/a-zA-Z0-9.+*!?\\^\$-]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
 			if ((${_option_level} == 0)); then
@@ -163,8 +171,8 @@ init() {
 			done
 			let _level--
 		fi
-		#                            1(occur) 2(name)        3  4(alias)       5           6(constraint)           7                                     8(description)
-		if [[ ${_opt} =~ ^${_spaces}*([!+*?]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9]))?(${_spaces}+([!:|@_/a-zA-Z0-9-]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+		#                            1(occur) 2(name)        3  4(alias)        5           6(constraint)           7                                     8(description)
+		if [[ ${_opt} =~ ^${_spaces}*([!+*?]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9])?)?(${_spaces}+([!:|@_/a-zA-Z0-9-]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
 			_option=$(__join . ${_command} ${BASH_REMATCH[2]})
 			_OPTION=${_option^^}
 			_OPTION=ADS_OPT_${_OPTION//[.-]/_}
@@ -177,7 +185,7 @@ init() {
 			esac
 			_name=${BASH_REMATCH[2]}
 			_alias=${BASH_REMATCH[4]}
-			((${#_alias} == 0)) && _alias=${_name:0:1}
+			((${#_alias} == 0)) && [[ ${BASH_REMATCH[3]} != '|' ]] && _alias=${_name:0:1}
 			if ((${#_command} == 0)); then
 				_COMMAND=ADS_CMD_0
 			else
@@ -685,9 +693,9 @@ __cmd_error() {
 		__ads__) _cmdid=$1;;
 		__ads__.usage)    echo exit 0; __usage ${ADS_ARGV[@]:2}; exit $?;;
 		__ads__.grofftty) echo exit 0; __groff | groff -Kutf8 -Tutf8 -man - >${ADS_ARGV[2]}; exit $?;;
-		__ads__.pdf)      echo exit 0; __groff true | groff -Kutf8  -dpaper=a4 -P-pa4 -Tpdf -t -man - >${ADS_ARGV[2]}; exit $?;;
+		__ads__.pdf)      echo exit 0; __groff true | groff -Kutf8 -U -dpaper=a4 -P-pa4 -Tpdf -mpdfmark -t -man - >${ADS_ARGV[2]}; exit $?;;
 		__ads__.manpage)  ;&
-		__ads__.man)      echo exit 0; __groff >${ADS_ARGV[2]}; exit $?;;
+		__ads__.man)      echo exit 0; __groff true >${ADS_ARGV[2]}; exit $?;;
 		__ads__.markdown) ;&
 		__ads__.md) echo exit 0; echo ${ADS_ARGV[2]}>&2; __markdown >${ADS_ARGV[2]}; exit $?;;
 		__ads__.bash-completion) echo exit 0; __ads_heredoc|__bash-completion >${ADS_ARGV[2]}; exit $?;;
@@ -707,40 +715,241 @@ __opt_error() {
 }
 # }}} cmdline
 
+__is_dark() {
+	local _color=${*// /} # %02x%02x%02x r g b
+	if ${INIT_PERSEVED_COLOR:=false}; then
+		(( ((299 * 16#${_color:0:2} + 587 * 16#${_color:2:2} + 114 * 16#${_color:4:2}) / (1000)) < 128 ))
+	else
+		(( ((2126 * 16#${_color:0:2} + 7152 * 16#${_color:2:2} + 0722 * 16#${_color:4:2}) / (10000)) < 128 ))
+	fi
+}
+
 # {{{ groff
 __groff() {
 	local _pdf=$1
 	local _cmd _id _value
 	local _has_header_logo
+	local _first_page_header_dimentions _first_page_header_height # cm
+	local _color # %02x%02x%02x r g b
+	local _luminance # %02x%02x%02x r g b
 
 	if [[ ${_pdf} = true ]]; then
+		if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
+			_first_page_header_dimentions=$(pdfinfo "${INIT_FIRST_PAGE_HEADER}"| sed -n 's/Page *size: *\([[:digit:].]*\) *x *\([[:digit:].]*\).*$/\1x\2/p')
+			_first_page_header_height=$(( 21*${_first_page_header_dimentions#*x}/${_first_page_header_dimentions%x*} ))c
+			: ${INIT_PRIMARY_COLOR:=#$(convert "${INIT_FIRST_PAGE_HEADER}" -flatten +dither -colors 2 -unique-colors -depth 8 -alpha off -format "%[hex:u]\\n" info:)}
+		fi
+		: ${INIT_SECONDARY_COLOR:=${INIT_PRIMARY_COLOR}}
 		cat - <<-EOF
-			.
-			.fam H
-			.
+			.TH "${ADS_CMD_0[name]^}" 1 "${ADS_CMD_0[reference]} - $(date +%D)" "${ADS_CMD_0[name]^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[section]}"
+			.RP
 			.nr PO 2c
 			.nr IN 1c
-			.nr SN 0.5c
 			.nr LL 17c
 			.nr LT 17c
-			.po 2c
-			.
-			.TH "${ADS_CMD_0[name]^^}" 1 "$(date +%D)" "${ADS_CMD_0[name]^^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[title]}"
+			.nr PS 0.4c
+			.nr PS-SS 0.4c
+			.nr PS-SH 0.5c
+			.nr VS 0.5c
+			.nr SN 0.5c
+			.de highlight-TH
+				\\h'-4c'\\M[banner-header-bg]\\D'P 0 (u;-\\\\n[.v]) 23c 0 0 (u;\\\\n[.v])'\\h'-19c'\\M[]
+			.	sp (u;-(\\\\n[.v]/2+\\\\n[.s])
+			..
+		EOF
+		if ${INIT_BANNER_HEADER:false}; then
+			if __is_dark ${INIT_PRIMARY_COLOR#*#}; then
+				cat - <<-EOF
+					.defcolor banner-header-fg rgb #ffffff
+					.defcolor banner-header-bg rgb ${INIT_PRIMARY_COLOR}
+				EOF
+			else
+				cat - <<-EOF
+					.defcolor banner-header-fg rgb #000000
+					.defcolor banner-header-bg rgb ${INIT_PRIMARY_COLOR}
+				EOF
+			fi
+		else
+			if __is_dark ${INIT_PRIMARY_COLOR#*#}; then
+				cat - <<-EOF
+					.defcolor banner-header-fg rgb ${INIT_PRIMARY_COLOR}
+					.defcolor banner-header-bg rgb #ffffff
+				EOF
+			else
+				cat - <<-EOF
+					.defcolor banner-header-fg rgb #000000
+					.defcolor banner-header-bg rgb #ffffff
+				EOF
+			fi
+		fi
+		if [[ ${INIT_STYLE_SECTION} = highlight ]]; then
+			if __is_dark ${INIT_PRIMARY_COLOR#*#}; then
+				cat - <<-EOF
+					.defcolor section-fg rgb #ffffff
+					.defcolor section-bg rgb ${INIT_PRIMARY_COLOR}
+				EOF
+			else
+				cat - <<-EOF
+					.defcolor section-fg rgb #000000
+					.defcolor section-bg rgb ${INIT_PRIMARY_COLOR}
+				EOF
+			fi
+		else
+			cat - <<-EOF
+				.defcolor section-fg rgb ${INIT_PRIMARY_COLOR}
+				.defcolor section-bg rgb #ffffff
+			EOF
+		fi
+		if [[ ${INIT_STYLE_SUBSECTION} = highlight ]]; then
+			if __is_dark ${INIT_SECONDARY_COLOR#*#}; then
+				cat - <<-EOF
+					.defcolor subsection-fg rgb #ffffff
+					.defcolor subsection-bg rgb ${INIT_SECONDARY_COLOR}
+				EOF
+			else
+				cat - <<-EOF
+					.defcolor subsection-fg rgb #000000
+					.defcolor subsection-bg rgb ${INIT_SECONDARY_COLOR}
+				EOF
+			fi
+		else
+			cat - <<-EOF
+				.defcolor subsection-fg rgb #000000
+				.defcolor subsection-bg rgb #ffffff
+			EOF
+		fi
+		case ${INIT_STYLE_SECTION:none} in
+			highlight)
+				cat - <<-EOF
+					.de highlight-SH
+						\\h'-4c'\\M[section-bg]\\D'P 0 (u;-\\\\n[.v]) 23c 0 0 (u;\\\\n[.v])'\\h'-19c'\\M[]
+					.	sp (u;-(\\\\n[.v]/2+\\\\n[.s])
+					..
+				EOF
+			;;
+			underline)
+				cat - <<-EOF
+					.de highlight-SH
+						\\h'-4c'\\M[section-bg]\\D'P 0 (u;\\\\n[.v]-2p) 23c 0 0 (u;\\\\n[.v])'\\h'-19c'\\M[]
+					.	sp (u;-(\\\\n[.v]/2+\\\\n[.s])
+					..
+				EOF
+			;&
+			*)
+				cat - <<-EOF
+					.de highlight-SH
+					..
+				EOF
+			;;
+		esac
+		cat - <<-EOF
+			$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
+				cat - <<-HEADER
+					.rn an-header an-header-orig
+					.de1 an-header
+					.if (2=\\\\n[.pn]) \\{
+					.	rs
+					.	po 0
+					.	vs 0
+					.	sp |0
+						\\X'pdf: pdfpic ${INIT_FIRST_PAGE_HEADER} -L 21c'
+					.	sp 0
+					.	vs
+					.	po
+					\\}
+					.	an-header-orig
+					.	sp |${_first_page_header_height}
+					..
+				HEADER
+			else
+				cat - <<-HEADER
+				HEADER
+			fi)
 			.de1 PT
 			.	fam H
 			$(if [[ -n ${INIT_LEFT_HEADER_LOGO} ]] || [[ -n ${INIT_CENTER_HEADER_LOGO} ]] || [[ -n ${INIT_RIGHT_HEADER_LOGO} ]]; then
 				cat - <<-LOGO_EOF
-					.	sp |0
-					$([[ -n ${INIT_LEFT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_LEFT_HEADER_LOGO} -L 0 1.2c'" || echo .)
+					$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
+						echo '.if (\\n[.pn]>2) \{'
+					else echo .
+					fi)
+					.	vs 0
+					.	sp |0.4c
+					 $([[ -n ${INIT_LEFT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_LEFT_HEADER_LOGO} -L 0 1.2c'" || echo .)
 					$([[ -n ${INIT_CENTER_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_CENTER_HEADER_LOGO} -C 0 1.2c 21c'" || echo .)
 					$([[ -n ${INIT_RIGHT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_RIGHT_HEADER_LOGO} -R 0 1.2c 19c'" || echo .)
-					.	sp |1.6c
+					.sp 2.8c
+					$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
+						echo '\}'
+					else echo .
+					fi)
 				LOGO_EOF
+			else
+				$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
+					cat - <<-HEADER
+						.vs 0
+						.sp |0
+						.if (2=\\\\n[.pn]) \X'pdf: pdfpic ${INIT_FIRST_PAGE_HEADER} -L 21c'
+					HEADER
+				else echo .
+				fi)
 			fi)
-			.	tl '\\\\*[an-title](\\\\*[an-section])'\\\\*[an-extra3]'\\\\*[an-title](\\\\*[an-section])'
+			.	fam H
+			.	vs 0
+			.	ps \\n[PS-SH]
+			.	nr margin \\n[PS-SH]
+			.	vs (u;\\n[PS-SH]+(2*\\\\n[margin]))
+			.	ie (\\\\n[.pn]=2) .sp |0
+			.	el .sp |(1.6c)
+			.	ie (\\\\n[.pn]=2) .sp \\\\n[margin]u
+			.	el .if '${INIT_BANNER_HEADER}'true' .highlight-TH
+			.	ns
+			.	vs
+			.	ps
+			.	ie (\\\\n[.pn]=2) \{
+			.		ie '${INIT_BANNER_HEADER}'true' \\m[banner-header-fg]
+			.		el \\m[banner-header-bg]
+				\}
+			.	el \\m[banner-header-fg]
+			.	tl %\\\\*[an-title](\\\\*[an-section])%\\s[\\n[PS-SH]u]\\fB\\\\*[an-extra3]\\fR\\s[\\n[PS]u]%\\\\*[an-title](\\\\*[an-section])\\x'-\\\\n[margin]u'\\x'(u;\\\\n[margin]*2)'%
+			.	\\m[]
+			.	if (\\\\n[.pn]>1) .sp 0
+			.	ns
 			..
 			.
-			.color 1
+			.rn SH SH-orig
+			.de SH
+			.	rs
+			.	sp 1v
+			.	ps \\n[PS-SH]
+			.	vs (u;\\n[PS-SH]*2)
+			.	highlight-SH
+			.	vs
+			.	ns
+			.	SH-orig \\m[section-fg]\\\\\$*\\m[]
+			.	set-an-margin
+			.	nr IN 1c
+			.	rs
+			.	vs
+			.	ll 17c
+			.	sp 1v
+			.	ns
+			..
+			.po \\n[PO]u
+			.ll 17c
+			.pdfinfo /Author ${ADS_CMD_0[author]} ${ADS_CMD_0[authors]}
+			.pdfinfo /Subject ${ADS_CMD_0[name]} - ${ADS_CMD_0[resume]}
+			.pdfinfo /Title ${ADS_CMD_0[title]}
+			.pdfinfo /Keywords ${ADS_CMD_0[name]} ${I18N[manual]} ${ADS_CMD_0[keywords]}
+			.pdfinfo /Creator aeten-ads
+			.pdfinfo /Identifier ${ADS_CMD_0[reference]:=${ADS_CMD_0[name]}.${ADS_CMD_0[version]}}
+			.pdfinfo /Version ${ADS_CMD_0[version]}
+			.
+			.fam H
+			$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
+				cat - <<-OFFSET
+				OFFSET
+			fi)
 		EOF
 	else
 		cat - <<-EOF
@@ -748,11 +957,11 @@ __groff() {
 		EOF
 	fi
 	cat - <<-EOF
-		.defcolor section rgb ${INIT_SECTION_FG:=#000000}
 		$(__groff_section ${I18N[name]})
 		.NH 1 ${ADS_CMD_0[name]}
 		.PP
-		${ADS_CMD_0[name]} - $(echo "${ADS_CMD_0[resume]}"|__groff_inline_style)
+			.in \\n[IN]u
+		${ADS_CMD_0[name]} − $(echo "${ADS_CMD_0[resume]}"|__groff_inline_style)
 		$(__groff_section ${I18N[synopsis]})
 		.
 		$(__groff_synopsis)
@@ -824,6 +1033,13 @@ __groff() {
 			__groff_opt ${ADS_OPT[${_id%%|*}]}
 			echo .sp -1
 		done)
+		$(for _id in "${!ADS_CMD_0[@]}"; do
+			[[ "${KEYS} multi value 0 id requiered options name NAME" =~ ${_id} ]] && continue
+			cat -<<-_EOF_
+				$(__groff_section ${_id})
+				$(echo "${ADS_CMD_0[$_id]}" | __groff_inline_style)
+			_EOF_
+		done)
 		$(for _id in author authors copyright copyleft licence license; do
 			[[ -z ${ADS_CMD_0[$_id]} ]] && continue
 			cat -<<-_EOF_
@@ -840,14 +1056,7 @@ __groff_inline_style() {
 
 __groff_section() {
 	if [[ ${_pdf} = true ]]; then
-		cat <<-EOF
-			.rs
-			.sp
-			.SH \s+3\m[section]${*^}\m[]
-			.rs
-			.sp 0.15v
-			.ns
-		EOF
+		echo ".SH ${*^}"
 	else
 		echo ".SH ${*^^}"
 	fi
@@ -909,17 +1118,20 @@ __groff_synopsis() {
 
 __groff_opt() {
 	local -n _opt=$1
-	local _value _formated_value
+	local _value _formated_value _formated_alias
 	_value=${_opt[value]}
 	if [ -n "${_value}" ]; then
 		_value=${_value#/}
 		_value=${_value#\!/}
 		_value=${_value%/}
-		_formated_value="\\ \\fI${_value}"
+		_formated_value="\\ \\f[I]${_value}"
+	fi
+	if [[ -n ${_opt[alias]} ]]; then
+		_formated_alias=", \\f[B]\\-${_opt[alias]}\f[R]${_formated_value}"
 	fi
 	cat - <<-EOF
 		.TP
-		\\f[B]\\-\\-${_opt[name]}\\f[R]${_formated_value}\\f[R], \\f[B]\\-${_opt[alias]}\\f[R] ${_formated_value}
+		\\f[B]\\-\\-${_opt[name]}\\f[R]${_formated_value}\\f[R]${_formated_alias}
 		\\f[R]$(echo "${_opt[description]}"|__groff_inline_style)
 		.sp
 	EOF
