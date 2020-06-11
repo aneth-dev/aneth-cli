@@ -4,7 +4,7 @@
 # debian: bash coreutils grep man-db groff-base
 
 NAME=$(basename $0)
-declare -gr KEYS=$(echo lang title version reference keywords resume description author{,s} copyright copyleft licen{c,s}e)
+declare -gr KEYS=$(echo lang section title version reference keywords resume description author{,s} copyright copyleft licen{c,s}e)
 declare -A I18N_en
 for _ in ${KEYS} manual name synopsis command{,s} option{,s}; do
 	I18N_en[$_]=$_
@@ -750,7 +750,7 @@ __groff() {
 			.nr PS 0.4c
 			.nr PS-SS 0.4c
 			.nr PS-SH 0.5c
-			.nr VS 0.5c
+			.nr VS 0.52c
 			.nr SN 0.5c
 			.de highlight-TH
 				\\h'-4c'\\M[banner-header-bg]\\D'P 0 (u;-\\\\n[.v]) 23c 0 0 (u;\\\\n[.v])'\\h'-19c'\\M[]
@@ -873,28 +873,21 @@ __groff() {
 						echo '.if (\\n[.pn]>2) \{'
 					else echo .
 					fi)
+					.	rs
 					.	vs 0
-					.	sp |0.4c
+					.	po 0.5c
+					.	sp |0.2c
 					 $([[ -n ${INIT_LEFT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_LEFT_HEADER_LOGO} -L 0 1.2c'" || echo .)
 					$([[ -n ${INIT_CENTER_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_CENTER_HEADER_LOGO} -C 0 1.2c 21c'" || echo .)
-					$([[ -n ${INIT_RIGHT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_RIGHT_HEADER_LOGO} -R 0 1.2c 19c'" || echo .)
-					.sp 2.8c
+					$([[ -n ${INIT_RIGHT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${INIT_RIGHT_HEADER_LOGO} -R 0 1.2c 20.5c'" || echo .)
+					.	sp
+					.	po 2c
 					$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
 						echo '\}'
 					else echo .
 					fi)
 				LOGO_EOF
-			else
-				$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
-					cat - <<-HEADER
-						.vs 0
-						.sp |0
-						.if (2=\\\\n[.pn]) \X'pdf: pdfpic ${INIT_FIRST_PAGE_HEADER} -L 21c'
-					HEADER
-				else echo .
-				fi)
 			fi)
-			.	fam H
 			.	vs 0
 			.	ps \\n[PS-SH]
 			.	nr margin \\n[PS-SH]
@@ -911,7 +904,7 @@ __groff() {
 			.		el \\m[banner-header-bg]
 				\}
 			.	el \\m[banner-header-fg]
-			.	tl %\\\\*[an-title](\\\\*[an-section])%\\s[\\n[PS-SH]u]\\fB\\\\*[an-extra3]\\fR\\s[\\n[PS]u]%\\\\*[an-title](\\\\*[an-section])\\x'-\\\\n[margin]u'\\x'(u;\\\\n[margin]*2)'%
+			.	tl %\\fB\\\\*[an-title]\\fR(\\\\*[an-section])%\\s[\\n[PS-SH]u]\\fB\\\\*[an-extra3]\\fR\\s[\\n[PS]u]%\\fB\\\\*[an-title]\\fR(\\\\*[an-section])\\x'-\\\\n[margin]u'\\x'(u;\\\\n[margin]*2)'%
 			.	\\m[]
 			.	if (\\\\n[.pn]>1) .sp 0
 			.	ns
@@ -930,9 +923,9 @@ __groff() {
 			.	set-an-margin
 			.	nr IN 1c
 			.	rs
-			.	vs
+			.	vs \\n[VS]u
 			.	ll 17c
-			.	sp 1v
+			.	if !'${INIT_STYLE_SECTION}'none' .sp 0.7v
 			.	ns
 			..
 			.po \\n[PO]u
@@ -946,10 +939,6 @@ __groff() {
 			.pdfinfo /Version ${ADS_CMD_0[version]}
 			.
 			.fam H
-			$(if [[ -n ${INIT_FIRST_PAGE_HEADER} ]]; then
-				cat - <<-OFFSET
-				OFFSET
-			fi)
 		EOF
 	else
 		cat - <<-EOF
@@ -960,7 +949,7 @@ __groff() {
 		$(__groff_section ${I18N[name]})
 		.NH 1 ${ADS_CMD_0[name]}
 		.PP
-			.in \\n[IN]u
+		.in \\n[IN]u
 		${ADS_CMD_0[name]} − $(echo "${ADS_CMD_0[resume]}"|__groff_inline_style)
 		$(__groff_section ${I18N[synopsis]})
 		.
@@ -976,6 +965,7 @@ __groff() {
 					continue
 				fi
 				echo .ns
+				echo .ad l
 				echo -n ".SS \fB${ADS_CMD_0[name]}\\ ${_cmd[id]//./\\ } "
 				for _id in ${_cmd[options]}; do
 					 __groff_synopsis_opt ${ADS_OPT[${_id%%|*}]}
@@ -995,6 +985,7 @@ __groff() {
 					echo "\\fI${_value}\\fR"
 				fi
 				echo $'\n.fi\n.'
+				echo .ad b
 				#                        key=value
 				#                        key(key constraint)=value(value constraint)
 				#                        1       2  3        4       5  6
