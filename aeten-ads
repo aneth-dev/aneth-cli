@@ -187,8 +187,8 @@ init() {
 			done
 			let _level--
 		fi
-		#                            1(occur) 2(name)        3  4(alias)        5           6(constraint)           7                                     8(description)
-		if [[ ${_opt} =~ ^${_spaces}*([!+*?]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9])?)?(${_spaces}+([!:|@_/a-zA-Z0-9-]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
+		#                            1(occur) 2(name)        3  4(alias)        5           6(constraint)                       7                                     8(description)
+		if [[ ${_opt} =~ ^${_spaces}*([!+*?]?)([a-zA-Z0-9-]+)(\|([a-zA-Z0-9])?)?(${_spaces}+([][()=|_/a-zA-Z0-9.+*!?\\^\$-]+))?:(${_spaces}+\\${_spaces}+)*${_spaces}*([^ ].*) ]]; then
 			_option=$(__join . ${_command} ${BASH_REMATCH[2]})
 			_OPTION=${_option^^}
 			_OPTION=ADS_OPT_${_OPTION//[.-]/_}
@@ -805,24 +805,19 @@ __groff() {
 				#                        1       2  3        4       5  6
 				if [[ ${_cmd[value]} =~ ^([^\(]*)(\((.*)\))?=([^\(]*)(\((.*)\))?$ ]]; then
 					if (( ${#BASH_REMATCH[3]} > 0 )); then
-						echo "\\fI${BASH_REMATCH[1]}\\fR${I18N[colon]}${BASH_REMATCH[3]//|/ | }"
-						echo $'\n.fi\n.'
+						echo $'\n.fi\n.ad b\n\m[grey40]'"\\fI${BASH_REMATCH[1]}\\fR${I18N[colon]}${BASH_REMATCH[3]//|/ | }"$'\m[]\n.sp 0.2\n.fi'
 					fi
 					if (( ${#BASH_REMATCH[6]} > 0 )); then
-						echo "\\fI${BASH_REMATCH[4]}\\fR${I18N[colon]}${BASH_REMATCH[6]//|/ | }"
-						echo $'\n.fi\n.'
+						echo $'\n.fi\n.ad b\n\m[grey40]'"\\fI${BASH_REMATCH[4]}\\fR${I18N[colon]}${BASH_REMATCH[6]//|/ | }"$'\m[]\n.sp 0.2\n.fi'
 					fi
 				#                          value
 				#                          value(value constraint)
 				#                          1      2  3
 				elif [[ ${_cmd[value]} =~ ^([^(]+)(\(([^)]+)\))?$ ]]; then
 					if (( ${#BASH_REMATCH[3]} > 0 )); then
-						echo $'\n.fi\n.'
-						echo "\\fI${BASH_REMATCH[1]}\\fR${I18N[colon]}${BASH_REMATCH[3]//|/ | }"
-						echo $'\n.fi\n.'
+						echo $'\n.fi\n.ad b\n\m[grey40]'"\\fI${BASH_REMATCH[1]}\\fR${I18N[colon]}${BASH_REMATCH[3]//|/ | }"$'\m[]\n.sp 0.2\n.fi'
 					fi
 				fi
-				[ "${_pdf}" = true ] && echo .sp -0.6v
 				echo "${_cmd[description]}"|__groff_inline_style
 				for _id in ${_cmd[options]}; do
 					__groff_opt ${ADS_OPT[${_id%%|*}]}
@@ -881,10 +876,17 @@ __groff_synopsis() {
 		.sp -1n
 		.SY \\f[B]${ADS_CMD_0[name]}\\f[R]
 	GROFF
-	for _id in ${ADS_CMD_0[options]}; do
-		[[ ${_id%%|*} = help ]] && continue
-		__groff_synopsis_opt ${ADS_OPT[${_id%%|*}]}
-	done
+
+	set -- ${ADS_CMD_0[options]}
+	if (( $# > 3 )); then
+		printf '\\f[R][\\f[I]options\\f[R]] '
+	else
+		for _id in ${ADS_CMD_0[options]}; do
+			[[ ${_id%%|*} = help ]] && continue
+			__groff_synopsis_opt ${ADS_OPT[${_id%%|*}]}
+		done
+	fi
+
 	if (( ${#ADS_CMDID[@]} > 1 )); then
 		echo -n "\\f[I]${I18N[command]}\\f[R] [\\f[I]args\\f[R]]"
 		echo $'\n.YS'
@@ -934,14 +936,54 @@ __groff_opt() {
 		_value=${_value#/}
 		_value=${_value#\!/}
 		_value=${_value%/}
+		_value=${_value/(*/}
+		_value=${_value//|/\\f[R]|\\f[I]}
 		_formated_value="\\ \\f[I]${_value}"
 	fi
 	if [[ -n ${_opt[alias]} ]]; then
 		_formated_alias=", \\f[B]\\-${_opt[alias]}\f[R]${_formated_value}"
 	fi
 	cat <<-GROFF
-		.TP
-		\\f[B]\\-\\-${_opt[name]}\\f[R]${_formated_value}\\f[R]${_formated_alias}
+
+		.sp -1
+		.IP "\\f[B]\\-\\-${_opt[name]}\\f[R]${_formated_value}\\f[R]${_formated_alias}"
+	GROFF
+	#                        key=value
+	#                        key(key constraint)=value(value constraint)
+	#                        1       2  3        4       5  6
+	if [[ ${_opt[value]} =~ ^([^\(]*)(\((.*)\))?=([^\(]*)(\((.*)\))?$ ]]; then
+		if (( ${#BASH_REMATCH[3]} > 0 )); then
+			cat <<-GROFF
+				.fi
+				.ad b
+				\m[grey40]\\fI${BASH_REMATCH[1]}\\fR${I18N[colon]}${BASH_REMATCH[3]//|/ | }\m[]
+				.sp 0.2v
+			GROFF
+		fi
+		if (( ${#BASH_REMATCH[6]} > 0 )); then
+			cat <<-GROFF
+				.fi
+				.ad b
+				\m[grey40]\\fI${BASH_REMATCH[4]}\\fR${I18N[colon]}${BASH_REMATCH[6]//|/ | }\m[]
+				.sp 0.2v
+			GROFF
+		fi
+	#                          value
+	#                          value(value constraint)
+	#                          1      2  3
+	elif [[ ${_opt[value]} =~ ^([^(]+)(\(([^)]+)\))?$ ]]; then
+		if (( ${#BASH_REMATCH[3]} > 0 )); then
+			cat <<-GROFF
+				.fi
+				.ad b
+				\m[grey40]\\fI${BASH_REMATCH[1]}\\fR${I18N[colon]}${BASH_REMATCH[3]//|/ | }\m[]
+				.sp 0.2v
+			GROFF
+		fi
+	fi
+	cat <<-GROFF
+		.fi
+		.ad b
 		\\f[R]$(echo "${_opt[description]}"|__groff_inline_style)
 		.sp
 	GROFF
@@ -966,8 +1008,9 @@ __groff_synopsis_opt() {
 	_value=${_value#/}
 	_value=${_value#\!/}
 	_value=${_value%/}
+	_value=${_value//|/\\f[R]|\\f[I]}
 	if ${_opt[requiered]}; then
-		printf '\\f[B]-%s\\f[R]|\\f[B]--%s %s\\f[R]\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\f[I]${_value}")"
+		printf        '\\f[B]-%s\\f[R]|\\f[B]--%s\\f[R]%s\\f[R]\\ '  ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\f[I]${_value} ")"
 	else
 		printf '\\f[R][\\f[B]-%s\\f[R]|\\f[B]--%s\\f[R]%s\\f[R]]\\ ' ${_opt[alias]%%|*} ${_opt[name]} "$([ -n "${_value}" ] && echo " \\f[I]${_value}")"
 	fi
@@ -1099,7 +1142,7 @@ __groff_pdf_header() {
 			.rn an-header an-header-orig
 			.de1 an-header
 			.	fam \n[.fam]
-			.	if (2=\\n[.pn]) \{
+			.	ie (2=\\n[.pn]) \{
 			.		rs
 			.		po 0
 			.		vs 0
@@ -1110,7 +1153,9 @@ __groff_pdf_header() {
 			.		po \n[PO]u
 				\}
 			.	an-header-orig
-			.	sp |\n[ads-first-page-header-height]u
+			.	ie (2=\\n[.pn]) \{
+			.		sp |\n[ads-first-page-header-height]u
+				\}
 			..
 			.rn BT BT-orig
 			.de1 BT
@@ -1125,18 +1170,19 @@ __groff_pdf_header() {
 	GROFF
 	if [[ -n ${ADS_MANUAL_LEFT_HEADER_LOGO} ]] || [[ -n ${ADS_MANUAL_CENTER_HEADER_LOGO} ]] || [[ -n ${ADS_MANUAL_RIGHT_HEADER_LOGO} ]]; then
 		if [[ -n ${ADS_MANUAL_FIRST_PAGE_HEADER} ]]; then
-			echo '.if (\\n[.pn]>2) \{'
+			echo '.if (\\n[.pn]>1) \{'
 		fi
 		cat - <<-GROFF
-			.	rs
-			.	vs 0
-			.	po 0.5c
-			.	sp |0.2c
-			 	$([[ -n ${ADS_MANUAL_LEFT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${ADS_MANUAL_LEFT_HEADER_LOGO} -L 0 1.2c'" || echo .)
-			 	$([[ -n ${ADS_MANUAL_CENTER_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${ADS_MANUAL_CENTER_HEADER_LOGO} -C 0 1.2c 21c'" || echo .)
-			 	$([[ -n ${ADS_MANUAL_RIGHT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${ADS_MANUAL_RIGHT_HEADER_LOGO} -R 0 1.2c 20.5c'" || echo .)
-			.	sp
-			.	po 2c
+			.  rs
+			.  vs 0
+			.  po 0.5c
+			.  sp |0.5c
+			   $([[ -n ${ADS_MANUAL_LEFT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${ADS_MANUAL_LEFT_HEADER_LOGO} -L 0 0.6c'")
+			   $([[ -n ${ADS_MANUAL_CENTER_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${ADS_MANUAL_CENTER_HEADER_LOGO} -C 0 1.2c'")
+			.  sp |0.4c
+			   $([[ -n ${ADS_MANUAL_RIGHT_HEADER_LOGO} ]] && echo "\X'pdf: pdfpic ${ADS_MANUAL_RIGHT_HEADER_LOGO} -R 0 0.8c 20.2c'")
+			.  sp
+			.  po \\n[PO]u
 		GROFF
 		if [[ -n ${ADS_MANUAL_FIRST_PAGE_HEADER} ]]; then
 			echo '\}'
