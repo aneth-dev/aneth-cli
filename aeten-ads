@@ -6,7 +6,7 @@
 __init__() {
 	. <(init -- $@ <<-'ADS'
 		#NAME: ads
-		#TITLE: ADS Manual
+		#TITLE: Aneth CLI tools user manual
 		#VERSION: 1.0
 		#RESUME: Auto documented script.
 		#DESCRIPTION: _ADS_ permit script using it to be self and automatically documented. This tool permit to generate code to initializing options command line and add a _help_ which generates one in the manpage format.
@@ -35,7 +35,6 @@ __init__() {
 		 	?center-header-logo| /logo: Logo to use at center header for PDF manual.
 		 	?style-section| style(none|highlight|underline): Defines the style of the titles of sections.
 		 	?style-subsection| style(none|highlight|underline): Defines the style of the titles of sections.
-		 	?perseved-color|: Using persived luminance instead of linear RGB algorithm.
 
 		 	?reference ref: The document reference. If no given, will be _<name.version>_.
 		 	?project name: The project name.
@@ -420,7 +419,7 @@ __parse_cmdline() {
 						if (( ${#_opt[value]} == 0 )); then
 							_opt=true
 						else
-							_opt=$2
+							_opt+="\$'${2//\'/\\\'}' "
 							shift
 						fi
 						_found=true
@@ -578,7 +577,7 @@ __init_value_definition() {
 __post_init() {
 	local -n _cmd=$1
 	local _shift=$2
-	local _k _v _param _access
+	local _k _v _access
 	local _varname=${_cmd[id]^^}
 	if [[ ${!_cmd} == ADS_CMD_0 ]]; then
 		_varname=${INIT_PREFIX}${ADS_CMD_0[NAME]}
@@ -662,7 +661,7 @@ __post_init() {
 		fi
 	fi
 
-	if ${ADS_OPT_HELP:-false}; then
+	if [[ ${ADS_OPT_HELP:-false} = true ]]; then
 		__help
 	elif (( ${#ADS_CMD[@]} > 1 )) && [[ ${!_cmd} == ADS_CMD_0 ]]; then
 		__usage ${_cmd[name]}: Missing command>&2
@@ -677,36 +676,91 @@ __post_init() {
 __opt_init() {
 	local -n _opt=$1
 	local -n _selected_cmd=$2
+	local _k _v _access
 	local _varname=${_opt[id]^^}
-	local _constraint
 	_varname=${INIT_PREFIX}${_varname//[.-]/_}
-	local _access
+	eval local -a _value=($_opt)
+
+	local -A _param
+
+	if (( ${#_opt} > 0 )); then
+
+	__init_value_definition _param ${_opt[value]}
+
+	if (( ${#_value} == 0 )) && (( ${#_param[key.name]} == 0 )); then
+		case ${_param[constraint]} in
+			/*/) _value[0]=./ ;;
+			/*)  _value[0]=-;;
+		esac
+	fi
+
+	_opt=
+	for _v in ${_value[@]}; do
+		if (( ${#_param[key.name]} > 0 )); then # Associative array
+			_k=${_v%%=*}
+			_v=${_v#*=}
+			if (( ${#_param[key.constraint]} > 0 )); then
+				__check_value "option '${_opt[name]}' parameter name for command ${_opt[command]}" "${_param[key.name]}" "$_k" "${_param[key.constraint]}"
+			fi
+		fi
+		case ${_param[type]} in
+			directory) if [[ -z ${_v} ]] && ${_opt[requiered]}; then _v=./;fi;;
+			file)      if [[ ${_v} =~ ^-$|^$ ]]; then ${_opt[requiered]} && _v=/dev/stdin || _v=/dev/stdout; fi;;
+		esac
+		if [[ ${_v} =~ ^-$|^$ ]]; then
+			case ${_opt[value]} in
+				/*/) ${_opt[requiered]} || _v=./ ;;
+				/*)  ${_opt[requiered]} && _v=/dev/stdin || _v=/dev/stdout ;;
+			esac
+		fi
+		if (( ${#_param[key.name]} > 0 )); then # Associative array
+			_opt[0]+="[\$'${_k//\'/\\\'}']=\$'${_v//\'/\\\'}' "
+		else
+			_opt[0]+="\$'${_v//\'/\\\'}' "
+		fi
+		if (( ${#_param[constraint]} > 0 )); then
+			__check_value "option '${_opt[name]}' parameter value for command ${_opt[command]}" "${_param[name]}" "$_v" "${_param[constraint]}"
+		fi
+	done
+
+	if ${_opt[multi]} && ${_opt[requiered]} && (( ${#_value[@]} == 0 )); then
+		echo "There must be at least one value for option '${_opt[id]//./ }'" >&2
+		echo exit 1
+		exit 0
+	elif ${_opt[requiered]} && (( ${#_value[@]} == 0 )); then
+		echo "There must be a value for option '${_opt[id]//./ }'" >&2
+		echo exit 1
+		exit 0
+	elif ! ${_opt[multi]} && (( ${#_value[@]} > 1 )); then
+		echo "There must be only one value for option '${_opt[id]//./ }'" >&2
+		echo exit 1
+		exit 0
+	fi
+
 	if ! ${INIT_WRITABLE:-false}; then
 		_access=r
 	fi
-
-	if (( ${#_opt} > 0 )); then
-		if [[ ${_opt[value]} =~ ^[a-z]+\((.+)\)$ ]]; then
-			_constraint=${BASH_REMATCH[1]}
+	_varname=${_varname//[.-]/_}
+	if [[ $_opt =~ ^\$\'(true|false)\'\ $ ]]; then
+		_opt=${BASH_REMATCH[1]}
+		echo "declare -g${_access} ${_varname}=${_opt}"
+	elif (( ${#_opt[value]} > 0 )); then
+		if (( ${#_param[key.name]} > 0 )); then # Associative array
+			if ${INIT_POSIX}; then
+				eval _param=(${_opt})
+				for _k in ${!_param[@]}; do
+					echo "declare -g${_access} ${_varname}_${_k^^}=${_param[$_k]}"
+				done
+			else
+				echo "declare -g${_access}A ${_varname}=(${_opt})"
+			fi
+		elif ${_opt[multi]}; then
+			echo "declare -g${_access}a ${_varname}=(${_opt})"
 		else
-		 	_constraint=${_opt[value]}
+			echo "declare -g${_access} ${_varname}=${_opt}"
 		fi
-		case ${_opt[value]} in
-			!/*/)   [[ -d $_opt ]] || {
-				echo Directory for option --${_opt[name]} must exists. >&2
-				echo exit 1
-			} ;;
-			!/*)    if [[ $_opt == - ]]; then _opt=/dev/stdin; else [[ -r $_opt ]] || {
-				echo File for option --${_opt[name]} must exists and be readable. >&2
-				echo exit 1
-			}; fi ;;
-			?/*|/*) if [[ $_opt == - ]]; then _opt=/dev/stdout; fi; >&2;;
-			*\|*)   [[ ${_opt} =~ ^${_constraint}$ ]] || {
-				echo Value for option --${_opt[name]} must be one of ${_constraint}. >&2
-				echo exit 1
-			} ;;
-		esac
-		echo "declare -g${_access} ${_varname}='${_opt}'"
+	fi
+
 	elif [[ ${_opt[command]} == ${_selected_cmd[id]} ]] && ${_opt[requiered]}; then
 		__usage --command ${_selected_cmd[id]} "Option --${_opt[name]} is requiered." >&2
 		echo exit 1
@@ -1104,7 +1158,7 @@ __groff_pdf_stylesheet() {
 	GROFF
 	if [[ -n ${ADS_MANUAL_FIRST_PAGE_HEADER} ]]; then
 		_first_page_header_dimentions=$(pdfinfo "${ADS_MANUAL_FIRST_PAGE_HEADER}"| sed -n 's/Page *size: *\([[:digit:].]*\) *x *\([[:digit:].]*\).*$/\1x\2/p')
-		_first_page_header_height=$(( 21*${_first_page_header_dimentions#*x}/${_first_page_header_dimentions%x*} ))c
+		_first_page_header_height=$(awk 'BEGIN{print (21*'${_first_page_header_dimentions#*x}')/'${_first_page_header_dimentions%x*}'}')c
 	cat <<-GROFF
 		.nr ads-first-page-header-height $_first_page_header_height
 	GROFF
@@ -1179,7 +1233,7 @@ __groff_pdf_header() {
 			.		po 0
 			.		vs 0
 			.		sp |0
-					\X'pdf: pdfpic \*[ads-first-page-header] -L 21c'
+					\X'pdf: pdfpic \*[ads-first-page-header] -L 21.05c'
 			.		sp 0
 			.		vs
 			.		po \n[PO]u
@@ -1202,7 +1256,7 @@ __groff_pdf_header() {
 	GROFF
 	if [[ -n ${ADS_MANUAL_LEFT_HEADER_LOGO} ]] || [[ -n ${ADS_MANUAL_CENTER_HEADER_LOGO} ]] || [[ -n ${ADS_MANUAL_RIGHT_HEADER_LOGO} ]]; then
 		if [[ -n ${ADS_MANUAL_FIRST_PAGE_HEADER} ]]; then
-			echo '.if (\\n[.pn]>1) \{'
+			echo '.if (\\n[.pn]>2) \{'
 		fi
 		cat - <<-GROFF
 			.  rs
@@ -1350,11 +1404,7 @@ __groff_pdf_stylesheet_colors() {
 
 __is_dark() {
 	local _color=${*// /} # %02x%02x%02x r g b
-	if ${INIT_PERSEVED_COLOR:=false}; then
-		(( ((299 * 16#${_color:0:2} + 587 * 16#${_color:2:2} + 114 * 16#${_color:4:2}) / (1000)) < 128 ))
-	else
-		(( ((2126 * 16#${_color:0:2} + 7152 * 16#${_color:2:2} + 0722 * 16#${_color:4:2}) / (10000)) < 128 ))
-	fi
+	! (( ((299 * 16#${_color:0:2} + 587 * 16#${_color:2:2} + 114 * 16#${_color:4:2}) / (1000)) < 128 ))
 }
 
 __join() {
