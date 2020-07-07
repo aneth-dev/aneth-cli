@@ -1,6 +1,6 @@
 #!/bin/sh
 
-. $(dirname "$0")/../aeten-cli.sh
+. $(dirname "$0")/../aneth-cli.sh
 
 aesh() {
    local cmdline arg0
@@ -11,7 +11,7 @@ aesh() {
          arg0=${arg}
          break
       done
-      __aeten_cli_is_api ${arg0} || cmdline="check --verbose -- ${cmdline}"
+      __aneth_cli_is_api ${arg0} || cmdline="check --verbose -- ${cmdline}"
       ${cmdline}
    done
 }

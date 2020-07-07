@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. <($(dirname ${0})/../aeten-ads init --prefix MY_ - -- "${@}" << EOF
+. <($(dirname ${0})/../aneth-ads init --prefix MY_ - -- "${@}" << EOF
 #NAME: $(basename ${0})
 #TITLE: Auto-documented script (ADS) test manual
 #VERSION: 1.0

@@ -10,17 +10,17 @@ rule uninstall
    description = Uninstall Æten CLI
    command = rm ${in}
 
-rule aeten-ads-test
+rule aneth-ads-test
    description = Run Æten ADS tests
-   command = test/aeten-ads.test -f foo -b -z baz && test/aeten-ads.test -h
+   command = test/aneth-ads.test -f foo -b -z baz && test/aneth-ads.test -h
 
-rule aeten-cli-test
+rule aneth-cli-test
    description = Run Æten CLI tests
-   command = test/aeten-cli.test
+   command = test/aneth-cli.test
 
-build test: phony || aeten-cli-test aeten-ads-test
-build aeten-cli-test: aeten-cli-test
-build aeten-ads-test: aeten-ads-test
+build test: phony || aneth-cli-test aneth-ads-test
+build aneth-cli-test: aneth-cli-test
+build aneth-ads-test: aneth-ads-test
 
 build install: phony || @@LINKS@@
 

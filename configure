@@ -11,9 +11,9 @@ done
 : ${prefix:=/usr/local}
 LIB_DIR="${prefix}/lib"
 BIN_DIR="${prefix}/bin"
-AETEN_MAKE=$(dirname ${0})/aeten-make
-CLI=aeten-cli.sh
-ADS=aeten-ads
+AETEN_MAKE=$(dirname ${0})/aneth-make
+CLI=aneth-cli.sh
+ADS=aneth-ads
 $($(dirname ${0})/${CLI} import check confirm)
 
 : ${builder:=$(./${CLI} confirm --no 'Use Ninja instead of GNU Make?' && echo ninja || echo make)}
@@ -32,10 +32,10 @@ check="./${CLI} check"
 addprefix="${AETEN_MAKE}/generate-builder add-prefix"
 target="${AETEN_MAKE}/generate-builder target --builder ${builder}"
 
-COMMANDS=$(. ./${CLI} && __aeten_cli_api ${CLI} | grep -v '^import$')
+COMMANDS=$(. ./${CLI} && __aneth_cli_api ${CLI} | grep -v '^import$')
 LINKS=$(${addprefix} ${BIN_DIR}/ ${COMMANDS})
 
-check -m "Generates ${build_script}" $(dirname ${0})/aeten-make/generate-builder -t ${template} "${@}" <<EOF '>' ${build_script}
+check -m "Generates ${build_script}" $(dirname ${0})/aneth-make/generate-builder -t ${template} "${@}" <<EOF '>' ${build_script}
 LIB_DIR = ${LIB_DIR}
 CLI = ${CLI}
 ADS = ${ADS}

@@ -1,6 +1,6 @@
 #!/bin/sh
-: ${AETEN_CLI_CONFIG_FILE="$(dirname $0)/../aeten-cli_config"}
-$($(dirname $0)/../aeten-cli.sh import all)
+: ${AETEN_CLI_CONFIG_FILE="$(dirname $0)/../aneth-cli_config"}
+$($(dirname $0)/../aneth-cli.sh import all)
 
 title Simple logging messages
 inform An information message
@@ -58,5 +58,5 @@ foo
 EOF
 check -m 'Check if third reply is negative.' test ${?} -eq 1
 
-[ "${AETEN_CLI_CONFIG_FILE}" = $(dirname $0)/aeten-cli_config ] && AETEN_CLI_CONFIG_FILE=$(dirname $0)/aeten-cli_symbols_config ${0} "${@}"
+[ "${AETEN_CLI_CONFIG_FILE}" = $(dirname $0)/aneth-cli_config ] && AETEN_CLI_CONFIG_FILE=$(dirname $0)/aneth-cli_symbols_config ${0} "${@}"
 exit 0

@@ -3,7 +3,7 @@
 : ${TERM=linux}
 export TERM
 
-__aeten_cli_colorize() {
+__aneth_cli_colorize() {
 	local color="${1}"; shift
 	local tput_color=$(tput colors 2>/dev/null)
 	test -z "${tput_color}" && tput_color=0
@@ -19,7 +19,7 @@ AETEN_CLI_LEVEL_DEBUG=$((${AETEN_CLI_LEVEL_INFORMATION}+1))
 AETEN_CLI_LEVEL_TRACE=$((${AETEN_CLI_LEVEL_DEBUG}+1))
 
 
-: ${AETEN_CLI_CONFIG_FILE=$(for prefix in /etc/ ~/. ~/.config/ ~/.etc/; do echo ${prefix}aeten-cli; done)}
+: ${AETEN_CLI_CONFIG_FILE=$(for prefix in /etc/ ~/. ~/.config/ ~/.etc/; do echo ${prefix}aneth-cli; done)}
 for config_file in ${AETEN_CLI_CONFIG_FILE}; do
 	[ -f ${config_file} ] && . ${config_file}
 done
@@ -44,11 +44,11 @@ done
 : ${AETEN_CLI_NO_PATTERN='n|no|No|NO'}
 : ${AETEN_CLI_SHADOW=*}
 
-__aeten_cli_string_length() {
+__aneth_cli_string_length() {
 	printf "${@}"|wc -m
 }
 
-__aeten_cli_add_padding() {
+__aneth_cli_add_padding() {
 	local length
 	local string
 	local string_length
@@ -56,7 +56,7 @@ __aeten_cli_add_padding() {
 	local padding_right
 	length=${1}; shift
 	string="${@}"
-	string_length=$(__aeten_cli_string_length "${string}")
+	string_length=$(__aneth_cli_string_length "${string}")
 	padding_left=$(( (${length}-${string_length}) / 2 ))
 	padding_right=$(( ${padding_left} + (${length}-${string_length}) % 2 ))
 	printf "%${padding_left}s%s%${padding_right}s" '' "${string}" ''
@@ -65,25 +65,25 @@ __aeten_cli_add_padding() {
 if [ 0 -eq ${AETEN_CLI_TAG_LENGTH:-0} ]; then
 	AETEN_CLI_TAG_LENGTH=0
 	for AETEN_CLI_TAG in "${AETEN_CLI_INFORMATION}" "${AETEN_CLI_WARNING}" "${AETEN_CLI_SUCCESS}" "${AETEN_CLI_FAILURE}" "${AETEN_CLI_QUERY}" "${AETEN_CLI_ANSWERED}"; do
-		[ ${#AETEN_CLI_TAG} -gt ${AETEN_CLI_TAG_LENGTH} ] && AETEN_CLI_TAG_LENGTH=$(__aeten_cli_string_length "${AETEN_CLI_TAG}")
+		[ ${#AETEN_CLI_TAG} -gt ${AETEN_CLI_TAG_LENGTH} ] && AETEN_CLI_TAG_LENGTH=$(__aneth_cli_string_length "${AETEN_CLI_TAG}")
 	done
 	unset AETEN_CLI_TAG
 fi
-AETEN_CLI_EMPTY_TAG=$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} '')
-AETEN_CLI_TEXT_ALIGN="$(printf "%$(($(__aeten_cli_string_length "${AETEN_CLI_OPEN_BRACKET}${AETEN_CLI_EMPTY_TAG}${AETEN_CLI_CLOSE_BRACKET}") + 1))s" '')"
+AETEN_CLI_EMPTY_TAG=$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} '')
+AETEN_CLI_TEXT_ALIGN="$(printf "%$(($(__aneth_cli_string_length "${AETEN_CLI_OPEN_BRACKET}${AETEN_CLI_EMPTY_TAG}${AETEN_CLI_CLOSE_BRACKET}") + 1))s" '')"
 
-AETEN_CLI_INFORMATION="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_INFORMATION}")")"
-AETEN_CLI_QUERY="$(__aeten_cli_colorize 'bold\nsetaf 3' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_QUERY}")")"
-AETEN_CLI_ANSWERED="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_ANSWERED}")")"
-AETEN_CLI_WARNING="$(__aeten_cli_colorize 'bold\nsetaf 3' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_WARNING}")")"
-AETEN_CLI_SUCCESS="$(__aeten_cli_colorize 'bold\nsetaf 2' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_SUCCESS}")")"
-AETEN_CLI_FAILURE="$(__aeten_cli_colorize 'bold\nsetaf 1' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_FAILURE}")")"
-AETEN_CLI_DEBUG="$(__aeten_cli_colorize 'bold\nsetaf 4' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_DEBUG}")")"
-AETEN_CLI_TRACE="$(__aeten_cli_colorize 'bold\nsetaf 4' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_TRACE}")")"
-AETEN_CLI_VERBOSE="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_VERBOSE}")")"
-AETEN_CLI_PROGRESS="$(__aeten_cli_colorize 'bold\nsetaf 7' "$(__aeten_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_PROGRESS}")")"
-AETEN_CLI_OPEN_BRACKET=$(__aeten_cli_colorize 'setaf 7' "${AETEN_CLI_OPEN_BRACKET}")
-AETEN_CLI_CLOSE_BRACKET=$(__aeten_cli_colorize 'setaf 7' "${AETEN_CLI_CLOSE_BRACKET}")
+AETEN_CLI_INFORMATION="$(__aneth_cli_colorize 'bold\nsetaf 7' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_INFORMATION}")")"
+AETEN_CLI_QUERY="$(__aneth_cli_colorize 'bold\nsetaf 3' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_QUERY}")")"
+AETEN_CLI_ANSWERED="$(__aneth_cli_colorize 'bold\nsetaf 7' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_ANSWERED}")")"
+AETEN_CLI_WARNING="$(__aneth_cli_colorize 'bold\nsetaf 3' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_WARNING}")")"
+AETEN_CLI_SUCCESS="$(__aneth_cli_colorize 'bold\nsetaf 2' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_SUCCESS}")")"
+AETEN_CLI_FAILURE="$(__aneth_cli_colorize 'bold\nsetaf 1' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_FAILURE}")")"
+AETEN_CLI_DEBUG="$(__aneth_cli_colorize 'bold\nsetaf 4' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_DEBUG}")")"
+AETEN_CLI_TRACE="$(__aneth_cli_colorize 'bold\nsetaf 4' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_TRACE}")")"
+AETEN_CLI_VERBOSE="$(__aneth_cli_colorize 'bold\nsetaf 7' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_VERBOSE}")")"
+AETEN_CLI_PROGRESS="$(__aneth_cli_colorize 'bold\nsetaf 7' "$(__aneth_cli_add_padding ${AETEN_CLI_TAG_LENGTH} "${AETEN_CLI_PROGRESS}")")"
+AETEN_CLI_OPEN_BRACKET=$(__aneth_cli_colorize 'setaf 7' "${AETEN_CLI_OPEN_BRACKET}")
+AETEN_CLI_CLOSE_BRACKET=$(__aneth_cli_colorize 'setaf 7' "${AETEN_CLI_CLOSE_BRACKET}")
 AETEN_CLI_TITLE_COLOR='bold\nsetaf 7'
 AETEN_CLI_SAVE_CURSOR_POSITION=$(tput sc)
 AETEN_CLI_RESTORE_CURSOR_POSITION=$(tput rc)
@@ -92,28 +92,28 @@ AETEN_CLI_MOVE_CURSOR_DOWN=$(tput il 1)
 AETEN_CLI_CLEAR_LINE=$(tput el1)
 AETEN_CLI_CLEAR_UNTIL_EOL=$(tput el)
 
-__aeten_cli_ppid() {
+__aneth_cli_ppid() {
 	awk '{print $4}' /proc/${1}/stat 2>/dev/null
 }
 
-__aeten_cli_out_fd() {
+__aneth_cli_out_fd() {
 	local script
 	local pid
 	pid=${$}
 	echo /proc/${pid}/fd/${1}
 }
 
-AETEN_CLI_OUTPUT=$(__aeten_cli_out_fd 2)
+AETEN_CLI_OUTPUT=$(__aneth_cli_out_fd 2)
 
-__aeten_cli_api() {
-	sed --quiet --regexp-extended 's/^aeten_cli_([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
+__aneth_cli_api() {
+	sed --quiet --regexp-extended 's/^aneth_cli_([[:alpha:]][[:alnum:]_-]+)\s*\(\)\s*\{/\1/p' "${*}" 2>/dev/null
 }
 
-__aeten_cli_is_api() {
-	test 1 -eq $(__aeten_cli_api "${1}"|grep -F "${2}"|wc -l) 2>/dev/null
+__aneth_cli_is_api() {
+	test 1 -eq $(__aneth_cli_api "${1}"|grep -F "${2}"|wc -l) 2>/dev/null
 }
 
-__aeten_cli_tag() {
+__aneth_cli_tag() {
 	local eol
 	local restore
 	local moveup
@@ -142,11 +142,11 @@ __aeten_cli_tag() {
 	printf "${moveup}\r${AETEN_CLI_OPEN_BRACKET}%s${AETEN_CLI_CLOSE_BRACKET}${restore}${eol}" "${tag}" >${AETEN_CLI_OUTPUT}
 }
 
-__aeten_cli_is_log_enable() {
-	[ ${AETEN_CLI_LEVEL} -ge $(__aeten_cli_get_log_level ${1}) ] && echo true || echo false
+__aneth_cli_is_log_enable() {
+	[ ${AETEN_CLI_LEVEL} -ge $(__aneth_cli_get_log_level ${1}) ] && echo true || echo false
 }
 
-__aeten_cli_log() {
+__aneth_cli_log() {
 	local level
 	local eol
 	local save
@@ -165,34 +165,34 @@ __aeten_cli_log() {
 	printf "\r${AETEN_CLI_CLEAR_LINE}${AETEN_CLI_OPEN_BRACKET}%s${AETEN_CLI_CLOSE_BRACKET} %s${save}${eol}" "${level}" "$message" >${AETEN_CLI_OUTPUT}
 }
 
-aeten_cli_title() {
+aneth_cli_title() {
 	local mesage
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
 	message="${@}"
-	echo "${AETEN_CLI_TEXT_ALIGN}$(__aeten_cli_colorize "${AETEN_CLI_TITLE_COLOR}" "${message}")" >${AETEN_CLI_OUTPUT}
+	echo "${AETEN_CLI_TEXT_ALIGN}$(__aneth_cli_colorize "${AETEN_CLI_TITLE_COLOR}" "${message}")" >${AETEN_CLI_OUTPUT}
 }
 
-aeten_cli_inform() {
+aneth_cli_inform() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable info) && __aeten_cli_log -l "${AETEN_CLI_INFORMATION}" "${@}"
+	$(__aneth_cli_is_log_enable info) && __aneth_cli_log -l "${AETEN_CLI_INFORMATION}" "${@}"
 }
 
-aeten_cli_success() {
+aneth_cli_success() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable info) && __aeten_cli_log -l "${AETEN_CLI_SUCCESS}" "${@}"
+	$(__aneth_cli_is_log_enable info) && __aneth_cli_log -l "${AETEN_CLI_SUCCESS}" "${@}"
 }
 
-aeten_cli_warn() {
+aneth_cli_warn() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable warn) && __aeten_cli_log -l "${AETEN_CLI_WARNING}" "${@}"
+	$(__aneth_cli_is_log_enable warn) && __aneth_cli_log -l "${AETEN_CLI_WARNING}" "${@}"
 }
 
-aeten_cli_error() {
+aneth_cli_error() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable error) && __aeten_cli_log -l "${AETEN_CLI_FAILURE}" "${@}"
+	$(__aneth_cli_is_log_enable error) && __aneth_cli_log -l "${AETEN_CLI_FAILURE}" "${@}"
 }
 
-aeten_cli_fatal() {
+aneth_cli_fatal() {
 	local usage
 	local errno
 	usage="${FUNCNAME:-${0}} [--help|h] [--errno|-e <errno>] [--] <message>"
@@ -209,24 +209,24 @@ aeten_cli_fatal() {
 		shift
 	done
 	[ 0 -lt ${#} ] || { echo "Usage: ${usage}" >&2 ; exit 2; }
-	$(__aeten_cli_is_log_enable fatal) && __aeten_cli_log -l "${AETEN_CLI_FAILURE}" "${@}"
+	$(__aneth_cli_is_log_enable fatal) && __aneth_cli_log -l "${AETEN_CLI_FAILURE}" "${@}"
 	case "$(basename ${0})" in
-		fatal|check|aeten-cli.sh) kill -s ABRT ${PPID};;
+		fatal|check|aneth-cli.sh) kill -s ABRT ${PPID};;
 		*) exit ${errno};;
 	esac
 }
 
-aeten_cli_debug() {
+aneth_cli_debug() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable debug) && __aeten_cli_log -l "${AETEN_CLI_DEBUG}" "${@}"
+	$(__aneth_cli_is_log_enable debug) && __aneth_cli_log -l "${AETEN_CLI_DEBUG}" "${@}"
 }
 
-aeten_cli_trace() {
+aneth_cli_trace() {
 	[ 0 -lt ${#} ] || { echo "Usage: ${FUNCNAME:-${0}} <message>" >&2 ; exit 1; }
-	$(__aeten_cli_is_log_enable trace) && __aeten_cli_log -l "${AETEN_CLI_TRACE}" "${@}"
+	$(__aneth_cli_is_log_enable trace) && __aneth_cli_log -l "${AETEN_CLI_TRACE}" "${@}"
 }
 
-aeten_cli_get_log_level() {
+aneth_cli_get_log_level() {
 	case "${AETEN_CLI_LEVEL}" in
 		${AETEN_CLI_LEVEL_FATAL})       echo fatal;;
 		${AETEN_CLI_LEVEL_ERROR})       echo error;;
@@ -238,7 +238,7 @@ aeten_cli_get_log_level() {
 	esac
 }
 
-__aeten_cli_get_log_level() {
+__aneth_cli_get_log_level() {
 	case "${1}" in
 		fatal)                   echo ${AETEN_CLI_LEVEL_FATAL};;
 		error)                   echo ${AETEN_CLI_LEVEL_ERROR};;
@@ -250,8 +250,8 @@ __aeten_cli_get_log_level() {
 	esac
 }
 
-aeten_cli_set_log_level() {
-	AETEN_CLI_LEVEL=$(__aeten_cli_get_log_level ${1})
+aneth_cli_set_log_level() {
+	AETEN_CLI_LEVEL=$(__aneth_cli_get_log_level ${1})
 }
 
 __read_shadow() {
@@ -279,13 +279,13 @@ __read_shadow() {
 			elif [ ${numeric} -eq 13 ] || [ ${numeric} -eq 0 ]; then
 				break
 			elif [ ${numeric} -eq 127 ]; then
-				length=$(( $(__aeten_cli_string_length "${reply}") - 1 ))
+				length=$(( $(__aneth_cli_string_length "${reply}") - 1 ))
 				[ ${length} -eq -1 ] && length=0 && continue
 				reply=$(echo ${reply}|awk '{ string=substr($0, 0, '${length}'); print string; }')
 				printf "\b${AETEN_CLI_CLEAR_UNTIL_EOL}" >${out}
 			else
 				reply=${reply}${char}
-				new_length=$(__aeten_cli_string_length "${reply}")
+				new_length=$(__aneth_cli_string_length "${reply}")
 				[ ${new_length} -gt ${length} ] && printf "${AETEN_CLI_SHADOW}" >${out}
 				length=${new_length}
 			fi
@@ -297,7 +297,7 @@ __read_shadow() {
 	return ${return_code}
 }
 
-aeten_cli_highlight() {
+aneth_cli_highlight() {
 	local color=7
 	local termcap='bold\nsetaf 7'
    local tput_color=$(tput colors 2>/dev/null)
@@ -343,7 +343,7 @@ aeten_cli_highlight() {
 	stdbuf -oL awk '{gsub("'"${pattern}"'", "'"$(printf "${termcap}"|tput -S)"'&'"$(tput sgr0)"'"); print}'
 }
 
-aeten_cli_query() {
+aneth_cli_query() {
 	local out
 	local usage
 	local opts
@@ -362,8 +362,8 @@ aeten_cli_query() {
 		esac
 		shift
 	done
-	[ 2 -eq $(basename ${AETEN_CLI_OUTPUT}) ] && out=${AETEN_CLI_OUTPUT} || out=$(__aeten_cli_out_fd 2)
-	__aeten_cli_log -n -s -l "${AETEN_CLI_QUERY}" "${*} " > ${out}
+	[ 2 -eq $(basename ${AETEN_CLI_OUTPUT}) ] && out=${AETEN_CLI_OUTPUT} || out=$(__aneth_cli_out_fd 2)
+	__aneth_cli_log -n -s -l "${AETEN_CLI_QUERY}" "${*} " > ${out}
 	if ${shadow}; then
 		REPLY=$(__read_shadow ${out})
 	else
@@ -372,12 +372,12 @@ aeten_cli_query() {
 	return_code=$?
 	[ 0 -eq ${return_code} ] || return ${return_code}
 	[ -t 0 ] && opts="-u -n"
-	__aeten_cli_tag -r ${opts} "${AETEN_CLI_ANSWERED}" >${out}
+	__aneth_cli_tag -r ${opts} "${AETEN_CLI_ANSWERED}" >${out}
 	printf "\r" >${out}
 	printf '%s' "${REPLY}"
 }
 
-aeten_cli_confirm() {
+aneth_cli_confirm() {
 	local expected
 	local yes_pattern
 	local no_pattern
@@ -422,7 +422,7 @@ ${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <
 	done
 
 	while true; do
-		reply=$(aeten_cli_query ${query_args} "${@}" $([ "${yes_pattern}" = "${AETEN_CLI_YES_PATTERN}" ] && echo "${expected}"))
+		reply=$(aneth_cli_query ${query_args} "${@}" $([ "${yes_pattern}" = "${AETEN_CLI_YES_PATTERN}" ] && echo "${expected}"))
 		echo "${reply}" | grep --extended-regexp "${yes_pattern}|${no_pattern}" 2>&1 1>/dev/null && break
 		if [ ${loop:-0} -eq 1 ]; then
 			printf "${AETEN_CLI_INVALID_REPLY_MESSAGE}\n" "${reply}" "[${yes_pattern}|${no_pattern}]" >${AETEN_CLI_OUTPUT}
@@ -436,7 +436,7 @@ ${FUNCNAME:-${0}} [--no|n] [--loop|-l] [--yes-pattern <pattern>] [--no-pattern <
 	[ ${assert:-0} -eq 0 ] && { [ ${expected} = ${AETEN_CLI_YES_DEFAULT} ] && return 0 || return 1; } || return 2
 }
 
-aeten_cli_check() {
+aneth_cli_check() {
 	local level
 	local message
 	local errno
@@ -464,41 +464,41 @@ aeten_cli_check() {
 	unset mode_usage
 	unset usage
 	: ${level=fatal}
-	is_log_enable=$(__aeten_cli_is_log_enable ${level})
+	is_log_enable=$(__aneth_cli_is_log_enable ${level})
 	: ${mode=${is_log_enable}}
 	: ${message="${@}"}
 	case ${mode} in
 		verbose) ${is_log_enable} && {
-		         	__aeten_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
+		         	__aneth_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
 		         	( eval "${@}" >&2 2>${AETEN_CLI_OUTPUT} )
 		         } || output=$(eval "${@}" 2>&1);;
 		quiet)   output=$(eval "${@}" 2>&1);;
-		*)       ${is_log_enable} && __aeten_cli_log -s -n -l "${AETEN_CLI_PROGRESS}" "${message}"
+		*)       ${is_log_enable} && __aneth_cli_log -s -n -l "${AETEN_CLI_PROGRESS}" "${message}"
 		         output=$(eval "${@}" 2>&1);;
 	esac
 	[ 0 -eq ${?} ] && errno=0 || errno=${errno:-${?}}
 	if [ 0 -eq ${errno} ] && ${is_log_enable}; then
 		case ${mode} in
-			verbose) aeten_cli_success "${message}";;
+			verbose) aneth_cli_success "${message}";;
 			quiet)   ;;
-			*)       __aeten_cli_tag success;;
+			*)       __aneth_cli_tag success;;
 		esac
 	elif ${is_log_enable}; then
 		case ${mode} in
-			verbose) aeten_cli_${level} "${message}";;
-			quiet)   __aeten_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
+			verbose) aneth_cli_${level} "${message}";;
+			quiet)   __aneth_cli_log -s -l "${AETEN_CLI_VERBOSE}" "${message}"
 			         printf "%s\n%s\n" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
-			         aeten_cli_${level} "${message}";;
-			*)       __aeten_cli_tag verbose
+			         aneth_cli_${level} "${message}";;
+			*)       __aneth_cli_tag verbose
 			         printf "%s\n%s\n" "${*}" "${output}" >${AETEN_CLI_OUTPUT}
-			         aeten_cli_${level} "${message}";;
+			         aneth_cli_${level} "${message}";;
 		esac
 		[ 'fatal' = ${level} ] && exit ${errno}
 	fi
 	return ${errno}
 }
 
-aeten_cli_unterm() {
+aneth_cli_unterm() {
 	local unbuffered
 	while [ ${#} -ne 0 ]; do
 		case "${1}" in
@@ -518,26 +518,26 @@ aeten_cli_unterm() {
 	}"
 }
 
-aeten_cli_import() {
+aneth_cli_import() {
 	local api
 	local all
 	local import
-	all=$(__aeten_cli_api ${1})
+	all=$(__aneth_cli_api ${1})
 	api=$(echo "${all}"|paste -sd\|)
 	shift
 	[ "${1}" = all ] && [ 1 -eq ${#} ] && import="${all}" || import="${@}"
 	for cmd in ${import}; do
 		echo ${cmd}|grep -E ${api} >/dev/null || { echo "Unexpected token ${cmd}" >&2; exit 1; }
-		eval ${cmd}'() { aeten_cli_'${cmd}' "${@}"; }'
+		eval ${cmd}'() { aneth_cli_'${cmd}' "${@}"; }'
 	done
 }
 
-if [ aeten-cli.sh = $(basename $(readlink -f ${0})) ]; then
-	if __aeten_cli_is_api "$(readlink -f ${0})" "$(basename ${0})"; then
-		aeten_cli_$(basename ${0}) "${@}"
-	elif [ ! -L ${0} ] && __aeten_cli_is_api "${0}" "${1}"; then {
-		aeten_cli_cmd=${1}
+if [ aneth-cli.sh = $(basename $(readlink -f ${0})) ]; then
+	if __aneth_cli_is_api "$(readlink -f ${0})" "$(basename ${0})"; then
+		aneth_cli_$(basename ${0}) "${@}"
+	elif [ ! -L ${0} ] && __aneth_cli_is_api "${0}" "${1}"; then {
+		aneth_cli_cmd=${1}
 		shift
-		[ import = "${aeten_cli_cmd}" ] && echo eval ". ${0} && aeten_cli_${aeten_cli_cmd} ${0} \"${@}\"" || aeten_cli_${aeten_cli_cmd} "${@}"
+		[ import = "${aneth_cli_cmd}" ] && echo eval ". ${0} && aneth_cli_${aneth_cli_cmd} ${0} \"${@}\"" || aneth_cli_${aneth_cli_cmd} "${@}"
 	} fi
 fi

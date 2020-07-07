@@ -1,6 +1,6 @@
-[submodule "aeten-make"]
-	path = aeten-make
-	url = https://github.com/aeten/aeten-make.git
+[submodule "aneth-make"]
+	path = aneth-make
+	url = https://gitlab.com/aneth.dev/aneth-make.git
 	branch = master
 	sparse-checkout = generate-builder\n\
 	                  ninja2make
