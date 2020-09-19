@@ -519,9 +519,7 @@ aneth_cli_unterm() {
 }
 
 aneth_cli_import() {
-	local api
-	local all
-	local import
+	local api all import
 	all=$(__aneth_cli_api ${1})
 	api=$(echo "${all}"|paste -sd\|)
 	shift
@@ -532,12 +530,20 @@ aneth_cli_import() {
 	done
 }
 
-if [ aneth-cli.sh = $(basename $(readlink -f ${0})) ]; then
-	if __aneth_cli_is_api "$(readlink -f ${0})" "$(basename ${0})"; then
-		aneth_cli_$(basename ${0}) "${@}"
-	elif [ ! -L ${0} ] && __aneth_cli_is_api "${0}" "${1}"; then {
-		aneth_cli_cmd=${1}
+if [ aneth-cli.sh = $(basename $(readlink -f $0)) ]; then
+	if __aneth_cli_is_api "$(readlink -f $0)" "$(basename $0)"; then
+		aneth_cli_$(basename $0) "$@"
+	elif [ ! -L $0 ] && __aneth_cli_is_api "$0" "$1"; then
+		aneth_cli_cmd=$1
 		shift
-		[ import = "${aneth_cli_cmd}" ] && echo eval ". ${0} && aneth_cli_${aneth_cli_cmd} ${0} \"${@}\"" || aneth_cli_${aneth_cli_cmd} "${@}"
-	} fi
+		if [ import = "${aneth_cli_cmd}" ]; then
+			if [ $# -eq 0 ]; then
+				__aneth_cli_api $0 | grep -v '^import$'
+			else
+				echo eval ". $0 && aneth_cli_import $0 \"$@\""
+			fi
+		else
+			aneth_cli_${aneth_cli_cmd} "$@"
+		fi
+	fi
 fi
