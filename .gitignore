@@ -1,4 +1,1 @@
-*.mk
-*ninja*
-!template.ninja
-makefile
+config.mk
