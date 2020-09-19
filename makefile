@@ -13,6 +13,9 @@ ${bindir}/ads: aneth-ads
 man: ads.pdf
 ads.pdf: ./aneth-ads
 
+clean:
+	$(RM) *.pdf
+
 %.pdf:
 	./aneth-ads manual --output $@ ${ADS_MANUAL_PDF_FLAGS} $(abspath $<)
-.PHONY: man
+.PHONY: man clean
