@@ -4,7 +4,7 @@
 # debian: bash coreutils grep man-db groff-base
 
 __init__() {
-	. <(init -- $@ <<-'ADS'
+	. <(init -- "$@" <<-'ADS'
 		#NAME: ads
 		#TITLE: Aneth CLI tools user manual
 		#VERSION: 1.1
@@ -14,14 +14,14 @@ __init__() {
 		#LICENCE: GLPv3
 		#COPYLEFT: Thomas Pérennou
 
-		@init: Initialize a shell script from _stdin_. A shell script must call it like _source <(${NAME} init [<args>] -- \$@ <EOF […] EOF)_.
-		 	?prefix NAME: Prefixes all generated variables by _NAME\__ (note the underscore after _NAME_).
-		 	?posix|P: Select this option to generate POSIX shell code. Do not use associative array for parameters in the form of _param_=_value_.
+		@init: Initialize a shell script from _stdin_. A shell script must call it like `source <(ads init [<args>] -- \$@ <EOF […] EOF)`.
+		 	?prefix NAME: Prefixes all generated variables by `NAME\_` (note the underscore after _NAME_).
+		 	?posix|P: Select this option to generate POSIX shell code. Do not use associative array for parameters in the form of `param=value`.
 		 	?writable: Unlock write variables protection.
 
-		@bash-completion executable: Generates Bash completion for an _executable_ supporting ${NAME}.
+		@bash-completion !/executable: Generates Bash completion for an _executable_ supporting ads.
 
-		@manual executable: Generates document on the standard output according to the given _format_ option.
+		@manual !/executable: Generates document on the standard output according to the given _format_ option.
 		 	?format format(pdf|manpage|man|markdown|md|grofftty): Document generation _format_.
 		 	?output /file: Output _file_ destination. The default is the name of executable with the appropriate extension in the current directory.
 		 	?cover-page: Creates a cover page page containing title, document reference, resume, authors, approbations.
@@ -50,7 +50,7 @@ __init__() {
 		#COLORS: The format must be in hexadecimal RGB like `#A1234B`.
 		ADS
 	)
-	${ADS_COMMAND} $@
+	${ADS_COMMAND} "$@"
 }
 
 # {{{ init
@@ -227,12 +227,14 @@ init() {
 			_CMD[options]+=" ${_option}|${_alias}"
 			ADS_OPT[${_option}]=${_OPTION}
 			# Add alias
-			_option2=$(__join . ${_command} ${_alias})
-			_OPTION2=ADS_OPT[${_option2}]
-			if ! declare -p "${!_OPTION2}" >& /dev/null; then
-				ADS_OPT[${_option}]=${_OPTION}
-			elif [[ ${DEBUG} = yes ]]; then
-				echo "[WARNING] While processing option alias ${_alias} for option ${_alias} (already taken by ${_OPTION2[id]})" >&2
+			if [[ -n ${_alias} ]]; then
+				_option2=$(__join . ${_command} ${_alias})
+				_OPTION2=ADS_OPT[${_option2}]
+				if ! declare -p "${!_OPTION2}" >& /dev/null; then
+					ADS_OPT[${_option}]=${_OPTION}
+				elif [[ ${DEBUG} = yes ]]; then
+					echo "[WARNING] While processing option alias ${_alias} for option ${_alias} (already taken by ${_OPTION2[id]})" >&2
+				fi
 			fi
 		fi
 	done
@@ -252,7 +254,7 @@ init() {
 	case ${ADS_DEBUG:-false} in
 		verbose|true) exec > >(tee -i /dev/stderr);;
 	esac
-	__init $@
+	__init "$@"
 }
 
 __init() {
@@ -275,7 +277,7 @@ __init() {
 		--opt-hook          __opt_init \
 		--cmd-error-hook    __cmd_error \
 		--opt-error-hook    __opt_error \
-		-- $@
+		-- "$@"
 }
 
 __add_command() {
@@ -355,6 +357,7 @@ __usage() {
 manual() {
 	: ${MANUAL_FORMAT:=pdf}
 	local _output _opt
+
 	if [[ -z ${MANUAL_OUTPUT} ]]; then
 		_output=$(basename ${MANUAL_EXECUTABLE})
 		_output=./${_output%%.*}.${MANUAL_FORMAT}
@@ -371,7 +374,7 @@ manual() {
 }
 
 bash-completion() {
-	"${BASH_COMPLETION_EXECUTABLE}" __ads__ bash-completion
+	"${BASH_COMPLETION_EXECUTABLE}" __ads__ bash-completion 2>&1
 }
 # }}} commands
 # {{{ cmdline
@@ -428,8 +431,6 @@ __parse_cmdline() {
 				done
 			done
 			if ! $_found && declare -F "${_opt_error_hook}" &>/dev/null; then
-				echo ${!_cmd} >&2
-				declare -p ${!_cmd} >&2
 				${_opt_error_hook} "${_cmdid}" "$1"
 			fi
 		else
@@ -649,7 +650,7 @@ __post_init() {
 			if ${INIT_POSIX}; then
 				eval _param=(${_cmd})
 				for _k in ${!_param[@]}; do
-					echo "declare -g${_access} ${_varname}_${_k^^}=${_param[$_k]}"
+					echo "declare -g${_access} ${_varname}_${_k^^}='${_param[$_k]}'"
 				done
 			else
 				echo "declare -g${_access}A ${_varname}=(${_cmd})"
@@ -667,7 +668,7 @@ __post_init() {
 		__usage ${_cmd[name]}: Missing command>&2
 	else
 		cat - <<-EOF
-			declare -g${_access} ${INIT_PREFIX}${ADS_CMD_0[NAME]}_COMMAND=${_cmd[id]}
+			declare -g${_access} ${INIT_PREFIX}${ADS_CMD_0[NAME]}_COMMAND='${_cmd[id]}'
 			shift $_shift
 		EOF
 	fi
@@ -695,7 +696,7 @@ __opt_init() {
 	fi
 
 	_opt=
-	for _v in ${_value[@]}; do
+	for _v in "${_value[@]}"; do
 		if (( ${#_param[key.name]} > 0 )); then # Associative array
 			_k=${_v%%=*}
 			_v=${_v#*=}
@@ -774,7 +775,7 @@ __cmd_error() {
 		__ads__) _cmdid=$1;;
 		__ads__.usage)    echo exit 0; __usage ${ADS_ARGV[@]:2}; exit $?;;
 		__ads__.manual)   echo exit 0; __manual; exit $?;;
-		__ads__.bash-completion) echo exit 0; __ads_heredoc|__bash-completion >${ADS_ARGV[2]}; exit $?;;
+		__ads__.bash-completion) echo exit 0; __bash-completion >&2; exit $?;;
 		*)
 			__usage --command "${1%.*}\..*" "${ADS_CMD_0[name]}: '${1##*.}' is not a '${_cmd//./ }' command. See '${ADS_CMD_0[name]} --help'." >&2
 			echo exit 1
@@ -787,6 +788,9 @@ __manual() {
 	local -a _groff_opt
 	if ${ADS_MANUAL_EVEN_ODD:-false}; then
 		_groff_opt+=-rD1
+	fi
+	if [[ -z ${ADS_CMD_0[reference]} ]]; then
+		ADS_CMD_0[reference]=${ADS_MANUAL_REFERENCE}
 	fi
 	case ${ADS_MANUAL_FORMAT} in
 		grofftty) echo exit 0; __groff | groff -Kutf8 -Tutf8 -man - >${ADS_MANUAL_OUTPUT}; exit $?;;
@@ -933,7 +937,7 @@ __groff() {
 }
 
 __groff_inline_style() {
-	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\]?)_([^_]+)_( )?/\1\\fI\2\\fR\3/g;s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/ /\\[u00A0]/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
+	sed --regexp-extended 's/\\n/\n.br\n/g; s/\\_/\\(ul/g; s/\\\*/\\[u0042]/g; s/([^\]?)\\\[u0060](.+)\\\[u0060]( )?/\1\\fC\2\\fR\3/g; s/([^\]?)_([^_]+)_( )?/\1\\fI\2\\fR\3/g; s/([^\\])?\*([^*]+)\*( )?/\1\\fB\2\\fR\3/g; s/ /\\[u00A0]/g; s/\\\[u0042\]/*/g; s/  / \\ /g'
 }
 
 __groff_section() {
@@ -1106,10 +1110,15 @@ __groff_synopsis_opt() {
 # {{{ groff pdf
 
 __groff_pdf() {
-	local _key
+	local _key _bottom_center
 
+	if [[ -z ${ADS_CMD_0[reference]} ]]; then
+		_bottom_center=${ADS_CMD_0[date]:-$(date +%D)}
+	else
+		_bottom_center="${ADS_CMD_0[reference]} - ${ADS_CMD_0[date]:-$(date +%D)}"
+	fi
 	cat <<-GROFF
-		.TH "\FH${ADS_CMD_0[name]^}" ${ADS_CMD_0[section]:-1} "${ADS_CMD_0[reference]} - ${ADS_CMD_0[date]:-$(date +%D)}" "${ADS_CMD_0[name]^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[title]}"
+		.TH "\FH${ADS_CMD_0[name]^}" ${ADS_CMD_0[section]:-1} "${_bottom_center}" "${ADS_CMD_0[name]^} ${ADS_CMD_0[version]}" "${ADS_CMD_0[title]}"
 		.ds ads-identifier "${ADS_CMD_0[reference]:=${ADS_CMD_0[name]}.${ADS_CMD_0[version]}}
 		.ds ads-style-section "${ADS_MANUAL_STYLE_SECTION:-none}
 	GROFF
@@ -1120,6 +1129,7 @@ __groff_pdf() {
 		echo ".ds ads-i18n-${_key// /_} \"${I18N[$_key]}"
 	done
 	declare -p | sed -n 's/^declare \(-[-a-z]\+\)\? ADS_MANUAL_\(.*\)="\(.*\)"$/ads-\2 \3/p' | awk '{gsub("_","-",$1); key=$1; $1=""; $1=$1;printf(".ds %s \"%s\n", tolower(key), substr($0,2))}'
+
 
 	__groff_pdf_macros
 	__groff_pdf_stylesheet
@@ -1404,6 +1414,9 @@ __groff_pdf_stylesheet_colors() {
 
 __is_dark() {
 	local _color=${*// /} # %02x%02x%02x r g b
+	if [[ -z  $_color ]]; then
+		_color=FFFFFF
+	fi
 	! (( ((299 * 16#${_color:0:2} + 587 * 16#${_color:2:2} + 114 * 16#${_color:4:2}) / (1000)) < 128 ))
 }
 
@@ -1604,7 +1617,7 @@ __markdown_opt() {
 __bash-completion() {
 	local _command=$1
 	cat - <<-EOF
-		_${_command// /-}_bash_completion() {
+		_${ADS_CMD_0[name]// /-}_bash_completion() {
 			local completion='$(__parse_cmdline --cmd-post-hook __bash_completion_commands --opt-hook __bash_completion_options)'
 			local -A options
 
@@ -1618,7 +1631,7 @@ __bash-completion() {
 				$(__parse_cmdline --opt-hook __bash_completion_value)
 			esac
 		}
-		complete -F "_${_command// /-}_bash_completion" "${_command}" $@
+		complete -F "_${ADS_CMD_0[name]// /-}_bash_completion" "${ADS_CMD_0[name]}" $@
 	EOF
 }
 
@@ -1741,4 +1754,4 @@ __debug_option() {
 
 # }}} debug
 
-__init__ $@
+__init__ "$@"
